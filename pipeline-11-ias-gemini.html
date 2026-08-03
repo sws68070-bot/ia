@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Linha de Montagem · Gemini · Multi-chave</title>
+<style>
+  :root{
+    --bg: #0b0d10;
+    --panel: #12151a;
+    --panel-2: #171b21;
+    --panel-3: #1c2129;
+    --line: #23282f;
+    --line-2: #2c333d;
+    --text: #d9dde2;
+    --dim: #7a828d;
+    --amber: #e0a458;
+    --green: #6fbf8f;
+    --red: #d9706b;
+    --blue: #6f9fd9;
+    --purple: #a08fe0;
+    --mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.5;
+    min-height:100vh;
+    background-image: radial-gradient(circle at 15% 0%, rgba(224,164,88,.06), transparent 45%),
+                       radial-gradient(circle at 100% 20%, rgba(111,159,217,.05), transparent 40%);
+  }
+  .wrap{max-width:1000px; margin:0 auto; padding:32px 20px 90px;}
+
+  header{margin-bottom:26px;}
+  .eyebrow{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+    color:var(--amber); text-transform:uppercase; margin-bottom:8px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow .tag{
+    background:rgba(160,143,224,.12); color:var(--purple); border:1px solid rgba(160,143,224,.35);
+    border-radius:20px; padding:2px 9px; font-size:10px; letter-spacing:.06em;
+  }
+  h1{font-size:25px; margin:0 0 6px; font-weight:650; letter-spacing:-.01em;}
+  .sub{color:var(--dim); font-size:13.5px; max-width:600px;}
+
+  .setup{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:20px; margin-bottom:22px;
+  }
+  .section-label{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--dim); margin:0 0 10px; display:flex; align-items:center; gap:8px;
+  }
+  .section-label:not(:first-child){margin-top:20px; padding-top:18px; border-top:1px solid var(--line);}
+
+  .row{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  label{
+    display:block; font-size:11px; color:var(--dim); margin-bottom:5px;
+    font-family:var(--mono); letter-spacing:.03em;
+  }
+  input, select, textarea{
+    background:var(--bg); border:1px solid var(--line); color:var(--text);
+    border-radius:7px; padding:9px 11px; font-size:13.5px; font-family:var(--sans);
+    width:100%;
+  }
+  textarea{resize:vertical; min-height:70px; font-family:var(--sans);}
+  input:focus, select:focus, textarea:focus{outline:none; border-color:var(--blue);}
+  .field{flex:1; min-width:180px;}
+  .field.wide{flex-basis:100%;}
+
+  .key-add-row{display:flex; gap:8px;}
+  .key-add-row input{flex:1;}
+  button.add-key{
+    background:var(--panel-3); border:1px solid var(--line-2); color:var(--text);
+    border-radius:7px; padding:0 16px; font-size:12.5px; cursor:pointer; font-family:var(--sans);
+    white-space:nowrap;
+  }
+  button.add-key:hover{border-color:var(--blue); color:var(--blue);}
+
+  .key-list{display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; min-height:0;}
+  .key-chip{
+    background:var(--panel-3); border:1px solid var(--line-2); border-radius:20px;
+    padding:5px 8px 5px 12px; font-family:var(--mono); font-size:11.5px; color:var(--text);
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .key-chip .rm{
+    cursor:pointer; color:var(--dim); width:16px; height:16px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:13px;
+  }
+  .key-chip .rm:hover{background:rgba(217,112,107,.18); color:var(--red);}
+
+  .mode-badge{
+    margin-top:12px; font-size:11.5px; color:var(--dim); background:var(--bg);
+    border:1px dashed var(--line-2); border-radius:8px; padding:9px 12px; line-height:1.5;
+  }
+  .mode-badge b{color:var(--amber); font-weight:600;}
+  .mode-badge.empty{color:var(--dim); font-style:italic;}
+
+  button.run{
+    background:var(--amber); color:#1a1408; border:none; border-radius:7px;
+    padding:12px 22px; font-weight:650; font-size:13.5px; cursor:pointer;
+    font-family:var(--sans); margin-top:18px; width:100%;
+  }
+  button.run:disabled{opacity:.4; cursor:not-allowed;}
+  button.run:hover:not(:disabled){filter:brightness(1.08);}
+
+  .note{font-size:11.5px; color:var(--dim); margin-top:10px; line-height:1.5;}
+
+  .progress-wrap{
+    display:flex; align-items:center; gap:12px; margin:22px 0 14px;
+  }
+  .progress-track{
+    flex:1; height:6px; background:var(--panel-2); border-radius:3px; overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .progress-bar{
+    height:100%; width:0%; border-radius:3px;
+    background:linear-gradient(90deg, var(--amber), var(--green));
+    transition:width .35s ease;
+  }
+  .progress-label{
+    font-family:var(--mono); font-size:11px; color:var(--dim); white-space:nowrap;
+  }
+
+  .pipeline{position:relative;}
+  .stage{
+    display:grid; grid-template-columns:34px 1fr; gap:12px;
+    padding:14px 0; border-bottom:1px solid var(--line);
+    position:relative;
+  }
+  .stage:last-child{border-bottom:none;}
+  .num{
+    width:34px; height:34px; border-radius:50%; border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-size:12px; color:var(--dim);
+    background:var(--panel); transition:.2s;
+  }
+  .stage.active .num{border-color:var(--amber); color:var(--amber); background:#1a1408;}
+  .stage.done .num{border-color:var(--green); color:var(--green); background:#0f1a13;}
+  .stage.error .num{border-color:var(--red); color:var(--red); background:#1c0f0e;}
+
+  .stage-body{min-width:0;}
+  .stage-title{font-size:13.5px; font-weight:600; display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .stage-key{
+    font-family:var(--mono); font-size:10px; color:var(--purple); background:rgba(160,143,224,.1);
+    border:1px solid rgba(160,143,224,.28); border-radius:20px; padding:1px 8px; display:none;
+  }
+  .stage-key.show{display:inline-block;}
+  .stage-role{font-size:11px; color:var(--dim); font-family:var(--mono); margin-top:2px;}
+  .stage-status{font-size:11px; color:var(--dim); margin-left:auto; font-family:var(--mono);}
+  .stage.active .stage-status{color:var(--amber);}
+  .stage.done .stage-status{color:var(--green);}
+  .stage.error .stage-status{color:var(--red);}
+
+  .stage-out{
+    margin-top:8px; background:var(--panel-2); border:1px solid var(--line);
+    border-radius:7px; padding:10px 12px; font-family:var(--mono); font-size:11.5px;
+    color:var(--dim); max-height:150px; overflow-y:auto; white-space:pre-wrap;
+    display:none;
+  }
+  .stage-out.show{display:block;}
+  .stage-out.expanded{max-height:400px;}
+  .toggle{
+    font-family:var(--mono); font-size:11px; color:var(--blue); cursor:pointer;
+    margin-top:6px; display:none; user-select:none;
+  }
+  .toggle.show{display:inline-block;}
+
+  .final{
+    margin-top:26px; background:var(--panel); border:1px solid var(--green);
+    border-radius:12px; padding:20px; display:none;
+  }
+  .final.show{display:block;}
+  .final h2{font-size:15px; margin:0 0 10px; color:var(--green);}
+  .final-text{font-size:13.5px; white-space:pre-wrap; margin-bottom:16px;}
+  .final-actions{display:flex; gap:10px; flex-wrap:wrap;}
+  .final-actions button{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text);
+    border-radius:7px; padding:9px 14px; font-size:12.5px; cursor:pointer; font-family:var(--sans);
+  }
+  .final-actions button:hover{border-color:var(--blue);}
+
+  .spinner{
+    width:10px; height:10px; border-radius:50%;
+    border:2px solid var(--line); border-top-color:var(--amber);
+    animation:spin .7s linear infinite; display:inline-block;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  ::-webkit-scrollbar{width:8px; height:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line); border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Linha de montagem — 11 chamadas <span class="tag">Gemini · multi-chave</span></div>
+    <h1>Cada IA faz uma parte do arquivo</h1>
+    <div class="sub">Você descreve o que quer construir. Onze chamadas à API do Gemini, cada uma com um papel fixo — planejar, codar, verificar, integrar, auditar letra por letra, testar e responder — trabalham em sequência (ou em paralelo, se você tiver chaves suficientes) no mesmo pedido.</div>
+  </header>
+
+  <div class="setup">
+    <div class="section-label">Chaves da API</div>
+    <div class="row">
+      <div class="field wide">
+        <label>Cole uma chave do Gemini e adicione. Pode colar várias de uma vez (uma por linha ou separadas por vírgula) — não tem limite de quantas.</label>
+        <div class="key-add-row">
+          <input type="password" id="keyInput" placeholder="AIza...">
+          <button type="button" class="add-key" onclick="addKey()">+ adicionar</button>
+        </div>
+        <div class="key-list" id="keyList"></div>
+        <div class="mode-badge empty" id="modeBadge">Nenhuma chave adicionada ainda — o modo de execução aparece aqui.</div>
+      </div>
+    </div>
+
+    <div class="section-label">Modelo &amp; pedido</div>
+    <div class="row">
+      <div class="field" style="max-width:220px;">
+        <label>Modelo (usado em todas as chamadas)</label>
+        <select id="model">
+          <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+          <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+          <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field wide">
+        <label>O que você quer que o arquivo faça?</label>
+        <textarea id="prompt" placeholder="Ex: um arquivo HTML com um inventário de itens estilo RPG — adicionar item, remover item, mostrar peso total, e um contador de ouro.">Um arquivo HTML com um sistema de inventário de RPG: adicionar item, remover item, calcular peso total, e um contador de ouro que dá pra gastar comprando itens de uma loja fixa.</textarea>
+      </div>
+    </div>
+    <button class="run" id="runBtn" onclick="runPipeline()">Rodar a linha de montagem</button>
+    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As 11 etapas revezam entre as chaves que você adicionar; com poucas chaves, a mesma é reaproveitada mais vezes (com pausas entre chamadas pra respeitar o limite gratuito). O processo todo pode levar alguns minutos.</div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="progress-label" id="progressLabel">0/11 etapas concluídas</div>
+  </div>
+
+  <div class="pipeline" id="pipeline"></div>
+
+  <div class="final" id="finalBox">
+    <h2>Entrega final</h2>
+    <div class="final-text" id="finalText"></div>
+    <div class="final-actions">
+      <button onclick="downloadCode()">Baixar o arquivo gerado (.html)</button>
+      <button onclick="toggleAllOutputs()">Ver saída de todas as etapas</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const STAGES = [
+  {n:1, title:"Lista de funções — versão A", role:"planejamento"},
+  {n:2, title:"Lista de funções — versão B", role:"planejamento (segunda opinião)"},
+  {n:3, title:"Implementa função 1", role:"código"},
+  {n:4, title:"Implementa função 2", role:"código"},
+  {n:5, title:"Implementa função 3", role:"código"},
+  {n:6, title:"Verificação — bate com a lista?", role:"revisão"},
+  {n:7, title:"Verificação — segunda revisão", role:"revisão"},
+  {n:8, title:"Junta tudo num arquivo só", role:"integração"},
+  {n:9, title:"Auditoria letra por letra", role:"revisão minuciosa"},
+  {n:10, title:"Teste final contra o pedido original", role:"QA"},
+  {n:11, title:"Resposta final para você", role:"entrega"},
+];
+
+let apiKeys = [];
+let keyIndex = 0;
+let doneStages = 0;
+let runState = { finalCode:"", running:false };
+
+// ---------- gerenciamento de chaves ----------
+
+function maskKey(k){
+  if(k.length<=8) return '•'.repeat(k.length);
+  return k.slice(0,4) + '···' + k.slice(-4);
+}
+
+function addKey(){
+  const input = document.getElementById('keyInput');
+  const raw = input.value;
+  const parts = raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+  parts.forEach(p => { if(!apiKeys.includes(p)) apiKeys.push(p); });
+  input.value = '';
+  renderKeys();
+}
+
+function removeKey(i){
+  apiKeys.splice(i,1);
+  renderKeys();
+}
+
+function renderKeys(){
+  const list = document.getElementById('keyList');
+  list.innerHTML = apiKeys.map((k,i)=>`
+    <span class="key-chip">${maskKey(k)}<span class="rm" onclick="removeKey(${i})" title="remover">×</span></span>
+  `).join('');
+  updateModeBadge();
+}
+
+function updateModeBadge(){
+  const n = apiKeys.length;
+  const badge = document.getElementById('modeBadge');
+  if(n===0){
+    badge.className = 'mode-badge empty';
+    badge.textContent = 'Nenhuma chave adicionada ainda — o modo de execução aparece aqui.';
+    return;
+  }
+  badge.className = 'mode-badge';
+  let msg;
+  if(n===1) msg = `<b>1 chave</b> — as 11 etapas rodam em sequência, todas usando a mesma chave, com pausas entre chamadas pra não estourar o limite gratuito.`;
+  else if(n===2) msg = `<b>${n} chaves</b> — planejamento (etapas 1-2) e as duas revisões (6-7) rodam em paralelo, revezando entre as chaves. Implementação ainda sequencial.`;
+  else if(n<5) msg = `<b>${n} chaves</b> — planejamento, revisões e as 3 implementações de função rodam em paralelo, cada chamada numa chave diferente.`;
+  else msg = `<b>${n} chaves</b> — quase tudo roda em paralelo: as 2 listas, as 3 implementações e as 2 revisões, cada uma na sua própria chave. A linha de montagem inteira fica bem mais rápida.`;
+  badge.innerHTML = msg;
+}
+
+document.getElementById('keyInput').addEventListener('keydown', e=>{
+  if(e.key === 'Enter'){ e.preventDefault(); addKey(); }
+});
+
+function nextKey(){
+  const k = apiKeys[keyIndex % apiKeys.length];
+  keyIndex++;
+  return k;
+}
+
+renderKeys();
+
+// ---------- render das etapas ----------
+
+function renderStages(){
+  const el = document.getElementById('pipeline');
+  el.innerHTML = STAGES.map(s => `
+    <div class="stage" id="stage-${s.n}">
+      <div class="num">${s.n}</div>
+      <div class="stage-body">
+        <div class="stage-title">${s.title}<span class="stage-key" id="key-${s.n}"></span><span class="stage-status" id="status-${s.n}">aguardando</span></div>
+        <div class="stage-role">${s.role}</div>
+        <div class="stage-out" id="out-${s.n}"></div>
+        <span class="toggle" id="toggle-${s.n}" onclick="toggleOut(${s.n})">ver saída ▾</span>
+      </div>
+    </div>
+  `).join('');
+}
+renderStages();
+
+function toggleOut(n){
+  const out = document.getElementById(`out-${n}`);
+  out.classList.toggle('show');
+  out.classList.toggle('expanded');
+}
+function toggleAllOutputs(){
+  STAGES.forEach(s => {
+    document.getElementById(`out-${s.n}`).classList.add('show');
+  });
+}
+
+function setStage(n, statusText, cls){
+  const stage = document.getElementById(`stage-${n}`);
+  const wasDone = stage.classList.contains('done');
+  stage.classList.remove('active','done','error');
+  if(cls) stage.classList.add(cls);
+  document.getElementById(`status-${n}`).innerHTML = statusText;
+  if(cls === 'done' && !wasDone) doneStages++;
+  if(cls !== 'done' && wasDone) doneStages--;
+  updateProgress();
+}
+
+function updateProgress(){
+  const pct = Math.round((doneStages / STAGES.length) * 100);
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = `${doneStages}/${STAGES.length} etapas concluídas`;
+}
+
+function markKeyUsed(n, key){
+  const el = document.getElementById(`key-${n}`);
+  el.textContent = maskKey(key);
+  el.classList.add('show');
+}
+
+function showOut(n, text){
+  const out = document.getElementById(`out-${n}`);
+  out.textContent = text;
+  document.getElementById(`toggle-${n}`).classList.add('show');
+}
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+async function sequentially(tasks){
+  const results = [];
+  for(const t of tasks) results.push(await t());
+  return results;
+}
+
+// ---------- chamada à API do Gemini ----------
+
+async function callGemini(apiKey, model, systemInstruction, userMsg){
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: "user", parts: [{ text: userMsg }] }],
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.6 }
+    })
+  });
+  if(!res.ok){
+    const errText = await res.text();
+    throw new Error(`Erro da API (${res.status}): ${errText.slice(0,220)}`);
+  }
+  const data = await res.json();
+  const cand = data.candidates && data.candidates[0];
+  if(!cand || !cand.content || !cand.content.parts){
+    const reason = cand ? cand.finishReason : 'sem candidatos';
+    throw new Error(`Resposta vazia ou bloqueada pela API (motivo: ${reason})`);
+  }
+  return cand.content.parts.map(p => p.text || "").join("\n");
+}
+
+function extractCode(text){
+  const match = text.match(/```(?:html|javascript|js)?\n([\s\S]*?)```/);
+  return match ? match[1].trim() : text.trim();
+}
+
+// ---------- prompts de sistema de cada etapa ----------
+
+const SYS_PLAN_A = "Você é o planejador de um projeto de código. Dado um pedido do usuário, liste exatamente 3 funções principais que o arquivo precisa ter, com uma descrição curta e objetiva de cada uma (o que recebe, o que faz, o que retorna/altera). Responda só com a lista numerada, sem código.";
+
+const SYS_PLAN_B = "Você é um segundo planejador independente, revisando o mesmo pedido do zero (não viu nenhuma outra lista). Liste exatamente 3 funções principais que o arquivo precisa ter, com descrição curta de cada uma. Responda só com a lista numerada, sem código.";
+
+function SYS_IMPL(i){
+  return `Você é o implementador responsável apenas pela FUNÇÃO ${i}. Duas listas de planejamento foram feitas (podem divergir levemente — use seu julgamento pra reconciliar). Escreva SOMENTE o código JavaScript da função ${i} (função pura ou métodos de objeto, como fizer sentido), pronta pra ser colada num arquivo HTML único com <script>. Não escreva HTML, não escreva as outras funções, não explique nada fora do bloco de código. Responda com o código dentro de um bloco \`\`\`javascript.`;
+}
+
+const SYS_REVIEW_1 = "Você é revisor de código. Compare o código das 3 funções com a lista de planejamento. Aponte objetivamente: (1) se cada função cumpre o que a lista pede, (2) qualquer bug óbvio, (3) inconsistências entre as funções (nomes, parâmetros). Termine com 'STATUS: OK' ou 'STATUS: PROBLEMAS' seguido de uma lista curta dos problemas.";
+
+const SYS_REVIEW_2 = "Você é um segundo revisor, independente do primeiro. Revise o mesmo código contra a mesma lista, com foco em: nomes de variáveis conflitantes, funções que dependem de algo que as outras não expõem, e erros de sintaxe JavaScript. Termine com 'STATUS: OK' ou 'STATUS: PROBLEMAS' seguido de uma lista curta.";
+
+const SYS_INTEGRATE = "Você é o integrador. Pegue os pedaços de código JavaScript fornecidos e monte UM ÚNICO arquivo HTML completo e funcional (com <!DOCTYPE html>, <head>, <body>, CSS básico pra ficar apresentável, e as funções dentro de uma tag <script> no final, conectadas a botões/inputs de interface simples). Corrija qualquer conflito de nomes ou inconsistência apontada nas revisões. Responda só com o código completo dentro de um bloco ```html.";
+
+const SYS_METICULOUS = "Você é o auditor mais minucioso da equipe. Releia o arquivo HTML final praticamente caractere por caractere: confira cada tag HTML aberta e fechada corretamente, cada chave, parêntese e colchete do JavaScript, cada aspas simples, dupla ou template literal fechada do jeito certo, ponto e vírgula faltando ou sobrando, vírgulas erradas, nomes de variáveis e funções usados de forma consistente do início ao fim do arquivo, e se a lógica de cada função bate exatamente com o que foi planejado. Trate isso como uma revisão de prova tipográfica, não como uma leitura corrida. Se achar QUALQUER problema, mesmo mínimo, responda começando com 'ERRO ENCONTRADO:' seguido da lista exata de cada problema e onde ele está. Se estiver absolutamente tudo certo, responda só 'STATUS: OK'.";
+
+const SYS_FIX = "Você está revisando o arquivo com toda a equipe reunida (planejamento, implementação, revisão, auditoria e teste, tudo no seu contexto). Um problema foi apontado. Corrija o arquivo HTML completo e devolva a versão corrigida inteira, sem comentários fora do código. Responda só com o código dentro de um bloco ```html.";
+
+const SYS_TEST = "Você é o testador final. Leia o pedido original do usuário, a lista de funções planejadas, e o arquivo HTML final. Confira linha por linha se o arquivo realmente atende ao pedido e se não tem nenhum erro de JavaScript (parênteses, chaves, ponto e vírgula, variáveis não definidas, funções chamadas com nome errado). Se achar QUALQUER erro, mesmo pequeno, responda começando com 'ERRO ENCONTRADO:' seguido da explicação exata. Se estiver tudo certo, responda só 'STATUS: APROVADO'.";
+
+const SYS_DELIVER = "Você é quem entrega o projeto pro usuário final. Com base em tudo que foi construído (pedido original, funções planejadas, auditoria minuciosa e teste funcional), escreva uma resposta curta e direta em português explicando o que foi entregue, como usar, e se algo foi corrigido durante o processo. Não repita o código, só explique.";
+
+// ---------- execução do pipeline ----------
+
+async function runPipeline(){
+  if(runState.running) return;
+  const model = document.getElementById('model').value;
+  const userPrompt = document.getElementById('prompt').value.trim();
+
+  if(apiKeys.length === 0){ alert("Adicione pelo menos uma chave da API do Gemini primeiro."); return; }
+  if(!userPrompt){ alert("Descreva o que você quer que o arquivo faça."); return; }
+
+  runState = { finalCode:"", running:true };
+  keyIndex = 0;
+  doneStages = 0;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('finalBox').classList.remove('show');
+  renderStages();
+  updateProgress();
+
+  const n = apiKeys.length;
+  const solo = n === 1;
+
+  async function stage(num, label, system, userMsg){
+    setStage(num, `<span class="spinner"></span> ${label}`, 'active');
+    const key = nextKey();
+    markKeyUsed(num, key);
+    try{
+      const out = await callGemini(key, model, system, userMsg);
+      showOut(num, out);
+      setStage(num, 'concluído', 'done');
+      if(solo) await sleep(2200);
+      return out;
+    } catch(err){
+      setStage(num, 'erro', 'error');
+      showOut(num, 'ERRO: ' + err.message);
+      throw err;
+    }
+  }
+
+  try{
+    // Etapas 1-2: duas listas independentes de funções
+    const planTasks = [
+      () => stage(1, 'gerando lista A', SYS_PLAN_A, userPrompt),
+      () => stage(2, 'gerando lista B', SYS_PLAN_B, userPrompt)
+    ];
+    const [listA, listB] = n >= 2
+      ? await Promise.all(planTasks.map(t => t()))
+      : await sequentially(planTasks);
+
+    const mergedList = `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA A:\n${listA}\n\nLISTA B:\n${listB}`;
+
+    // Etapas 3-5: implementação das 3 funções
+    const implTasks = [1,2,3].map(i => () => stage(
+      2 + i,
+      `codando função ${i}`,
+      SYS_IMPL(i),
+      `${mergedList}\n\nImplemente apenas a função ${i} da lista.`
+    ));
+    const rawParts = n >= 3
+      ? await Promise.all(implTasks.map(t => t()))
+      : await sequentially(implTasks);
+    const codeParts = rawParts.map(extractCode);
+    const allCode = codeParts.join('\n\n');
+    [3,4,5].forEach((num,idx) => showOut(num, codeParts[idx]));
+
+    // Etapas 6-7: verificação
+    const reviewTasks = [
+      () => stage(6, 'verificando', SYS_REVIEW_1, `${mergedList}\n\nCÓDIGO DAS 3 FUNÇÕES:\n${allCode}`),
+      () => stage(7, 'segunda verificação', SYS_REVIEW_2, `${mergedList}\n\nCÓDIGO DAS 3 FUNÇÕES:\n${allCode}`)
+    ];
+    const [verdictA, verdictB] = n >= 2
+      ? await Promise.all(reviewTasks.map(t => t()))
+      : await sequentially(reviewTasks);
+
+    // Etapa 8: junta tudo num arquivo HTML completo
+    const mergedRaw = await stage(8, 'integrando', SYS_INTEGRATE,
+      `PEDIDO ORIGINAL: ${userPrompt}\n\nCÓDIGO DAS FUNÇÕES:\n${allCode}\n\nOBSERVAÇÕES DA REVISÃO 1:\n${verdictA}\n\nOBSERVAÇÕES DA REVISÃO 2:\n${verdictB}`);
+    let finalFile = extractCode(mergedRaw);
+    showOut(8, finalFile);
+
+    // Etapa 9: auditoria letra por letra — antes de qualquer resposta ser gerada
+    let meticulous = await stage(9, 'revisando letra por letra', SYS_METICULOUS,
+      `ARQUIVO PARA AUDITORIA:\n${finalFile}`);
+
+    if(meticulous.trim().toUpperCase().startsWith('ERRO')){
+      setStage(9, 'problema encontrado — corrigindo', 'error');
+      const fixedRaw = await stage(9, 'corrigindo', SYS_FIX,
+        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM PROBLEMAS:\n${finalFile}\n\nPROBLEMAS ENCONTRADOS NA AUDITORIA:\n${meticulous}`);
+      finalFile = extractCode(fixedRaw);
+      showOut(9, meticulous + "\n\n— CORRIGIDO —\n\n" + finalFile);
+      setStage(9, 'corrigido', 'done');
+    } else {
+      setStage(9, 'aprovado', 'done');
+    }
+
+    // Etapa 10: teste funcional final contra o pedido original
+    let testResult = await stage(10, 'testando', SYS_TEST,
+      `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTAS DE PLANEJAMENTO:\n${mergedList}\n\nARQUIVO FINAL:\n${finalFile}`);
+
+    if(testResult.trim().toUpperCase().startsWith('ERRO')){
+      setStage(10, 'erro encontrado — corrigindo', 'error');
+      const fixedRaw2 = await stage(10, 'corrigindo', SYS_FIX,
+        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM ERRO:\n${finalFile}\n\nERRO REPORTADO PELO TESTE:\n${testResult}`);
+      finalFile = extractCode(fixedRaw2);
+      showOut(10, testResult + "\n\n— CORRIGIDO —\n\n" + finalFile);
+      setStage(10, 'corrigido', 'done');
+    } else {
+      setStage(10, 'aprovado', 'done');
+    }
+
+    runState.finalCode = finalFile;
+
+    // Etapa 11: resposta final
+    const finalMsg = await stage(11, 'escrevendo resposta', SYS_DELIVER,
+      `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA DE FUNÇÕES:\n${mergedList}\n\nRESULTADO DA AUDITORIA MINUCIOSA:\n${meticulous}\n\nRESULTADO DO TESTE FINAL:\n${testResult}`);
+
+    document.getElementById('finalText').textContent = finalMsg;
+    document.getElementById('finalBox').classList.add('show');
+    document.getElementById('finalBox').scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  } catch(err){
+    alert("A linha de montagem parou: " + err.message);
+  } finally {
+    runState.running = false;
+    document.getElementById('runBtn').disabled = false;
+  }
+}
+
+function downloadCode(){
+  if(!runState.finalCode){ alert("Nenhum arquivo gerado ainda."); return; }
+  const blob = new Blob([runState.finalCode], {type:'text/html'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'gerado-pela-linha-de-montagem.html';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
