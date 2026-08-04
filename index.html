@@ -270,7 +270,7 @@
       </div>
     </div>
     <button class="run" id="runBtn" onclick="runPipeline()">Rodar a linha de montagem</button>
-    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As chamadas revezam entre as chaves que você adicionar; com mais chaves, mais coisa roda em paralelo de verdade (as IAs "trabalhando juntas" ao mesmo tempo) e mais rápido a linha de montagem termina. Com poucas chaves, a mesma é reaproveitada mais vezes, com pausas e reenvio automático se o servidor do Gemini estiver sobrecarregado (503). O processo pode levar de alguns minutos a bem mais, dependendo de quantas funções a lista final tiver.</div>
+    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As chamadas revezam entre as chaves que você adicionar; com mais chaves, mais coisa roda em paralelo de verdade (as IAs "trabalhando juntas" ao mesmo tempo) e mais rápido a linha de montagem termina. Com poucas chaves, a mesma é reaproveitada mais vezes, com pausas ajustadas ao modelo escolhido e reenvio automático se o servidor do Gemini estiver sobrecarregado (503). Se uma chave estourar a cota (erro 429), só ela fica de descanso pelo tempo que o próprio Google informa — as outras continuam sendo usadas normalmente, sem parar a linha de montagem inteira. O processo pode levar de alguns minutos a bem mais, dependendo de quantas funções a lista final tiver.</div>
   </div>
 
   <div class="progress-wrap">
@@ -304,8 +304,41 @@ const STAGES = [
 ];
 const IMPL_STAGE = 4;
 
+// Intervalo padrão entre chamadas quando tem 1 chave só — só uma estimativa
+// conservadora client-side pra pedalar mais devagar em modelos que costumam
+// ter cota mais curta no free tier (ex: variantes "pro"). Se um nome de
+// modelo não estiver na lista, cai num valor mais cauteloso por padrão.
+const MODEL_PACING_MS = {
+  'gemini-flash-latest': 2200,
+  'gemini-3.6-flash': 2200,
+  'gemini-3.5-flash': 2200,
+  'gemini-3.5-flash-lite': 1500,
+  'gemini-3.1-pro-preview': 6500,
+};
+function pacingFor(model){
+  return MODEL_PACING_MS[model] || 2600;
+}
+
+// Rede de segurança: qualquer erro que escape dos try/catch da aplicação
+// (por exemplo uma falha de rede não tratada) cai aqui em vez de travar a
+// interface em silêncio com o botão "rodar" desabilitado pra sempre.
+window.addEventListener('unhandledrejection', e => {
+  console.error('Promise não tratada:', e.reason);
+  if(runState && runState.running){
+    const msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason);
+    alert('A linha de montagem parou de forma inesperada: ' + msg);
+    runState.running = false;
+    const btn = document.getElementById('runBtn');
+    if(btn) btn.disabled = false;
+  }
+});
+window.addEventListener('error', e => {
+  console.error('Erro não tratado:', e.error || e.message);
+});
+
 let apiKeys = [];
 let keyIndex = 0;
+let keyCooldowns = {}; // chave → timestamp (ms) até quando ela fica de fora do rodízio por cota estourada
 let doneStages = 0;
 let runState = { finalCode:"", running:false };
 
@@ -348,10 +381,10 @@ function updateModeBadge(){
   }
   badge.className = 'mode-badge';
   let msg;
-  if(n===1) msg = `<b>1 chave</b> — tudo roda em sequência, todas as chamadas usando a mesma chave, com pausas entre elas pra não estourar o limite gratuito. Ainda assim cada função é testada junto com as anteriores antes de seguir.`;
-  else if(n===2) msg = `<b>${n} chaves</b> — as 2 listas de planejamento rodam em paralelo, cada uma na sua chave. O rascunho das funções também roda em lotes de 2 ao mesmo tempo, mas a verificação continua sequencial (uma função de cada vez, testada com tudo que já foi aceito).`;
-  else if(n<6) msg = `<b>${n} chaves</b> — planejamento em paralelo, e o rascunho de várias funções acontece ao mesmo tempo em lotes de ${n}, usando as chaves simultaneamente. A verificação continua função por função, sempre testando o acumulado.`;
-  else msg = `<b>${n} chaves</b> — bastante coisa roda ao mesmo tempo: planejamento em paralelo e rascunho de até ${n} funções simultâneas por lote, cada chamada na sua própria chave. A parte de verificação continua sequencial de propósito, pra garantir que cada função nova é testada com tudo que já foi aceito antes de seguir — isso não é paralelizável sem risco de erro passar despercebido.`;
+  if(n===1) msg = `<b>1 chave</b> — tudo roda em sequência, todas as chamadas usando a mesma chave, com pausas entre elas ajustadas ao modelo escolhido pra não estourar o limite gratuito. Se mesmo assim vier erro de cota (429), essa chave descansa pelo tempo que o Google pedir e a linha de montagem tenta de novo automaticamente. Ainda assim cada função é testada junto com as anteriores antes de seguir.`;
+  else if(n===2) msg = `<b>${n} chaves</b> — as 2 listas de planejamento rodam em paralelo, cada uma na sua chave. O rascunho das funções também roda em lotes de 2 ao mesmo tempo, mas a verificação continua sequencial (uma função de cada vez, testada com tudo que já foi aceito). Se uma das duas chaves estourar cota, ela descansa sozinha e a linha de montagem segue com a outra.`;
+  else if(n<6) msg = `<b>${n} chaves</b> — planejamento em paralelo, e o rascunho de várias funções acontece ao mesmo tempo em lotes de ${n}, usando as chaves simultaneamente. A verificação continua função por função, sempre testando o acumulado. Qualquer chave que estourar cota descansa sozinha, sem travar as demais.`;
+  else msg = `<b>${n} chaves</b> — bastante coisa roda ao mesmo tempo: planejamento em paralelo e rascunho de até ${n} funções simultâneas por lote, cada chamada na sua própria chave. A parte de verificação continua sequencial de propósito, pra garantir que cada função nova é testada com tudo que já foi aceito antes de seguir — isso não é paralelizável sem risco de erro passar despercebido. Chaves que estourarem cota descansam individualmente e voltam ao rodízio sozinhas.`;
   badge.innerHTML = msg;
 }
 
@@ -359,10 +392,40 @@ document.getElementById('keyInput').addEventListener('keydown', e=>{
   if(e.key === 'Enter'){ e.preventDefault(); addKey(); }
 });
 
-function nextKey(){
-  const k = apiKeys[keyIndex % apiKeys.length];
-  keyIndex++;
-  return k;
+// ---------- rodízio de chaves com "descanso" por cota (429) ----------
+
+function msUntilAvailable(key){
+  const until = keyCooldowns[key] || 0;
+  return Math.max(0, until - Date.now());
+}
+
+// marca só UMA chave específica como estourada de cota por um tempo — as
+// outras chaves continuam no rodízio normalmente, então a linha de
+// montagem inteira não para por causa de uma chave só
+function markKeyCooldown(key, ms){
+  const until = Date.now() + ms;
+  if(!keyCooldowns[key] || keyCooldowns[key] < until) keyCooldowns[key] = until;
+}
+
+// pega a próxima chave livre no rodízio; se todas estiverem de cota
+// estourada no momento, espera só o tempo necessário até a primeira
+// liberar — em vez de um valor de espera fixo e às cegas
+async function acquireKey(onWait){
+  if(apiKeys.length === 0) throw new Error('Nenhuma chave da API disponível.');
+  while(true){
+    for(let i = 0; i < apiKeys.length; i++){
+      const idx = (keyIndex + i) % apiKeys.length;
+      const k = apiKeys[idx];
+      if(msUntilAvailable(k) === 0){
+        keyIndex = (idx + 1) % apiKeys.length;
+        return k;
+      }
+    }
+    let soonestMs = Infinity;
+    apiKeys.forEach(k => { soonestMs = Math.min(soonestMs, msUntilAvailable(k)); });
+    if(onWait) onWait(Math.max(1, Math.ceil(soonestMs / 1000)));
+    await sleep(Math.min(soonestMs, 15000) + 80);
+  }
 }
 
 renderKeys();
@@ -483,28 +546,64 @@ async function inBatches(tasks, batchSize){
 // ---------- chamada à API do Gemini, com retry ----------
 
 function isRetryable(err){
-  if(err.httpStatus === 503 || err.httpStatus === 429) return true;
+  if(err.httpStatus === 503 || err.httpStatus === 429 || err.httpStatus === 0) return true;
   return /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(err.message || '');
+}
+
+// Lê o tempo de espera que a própria API do Gemini sugere quando devolve
+// 429 (cota estourada) — costuma vir em error.details[].retryDelay, tipo
+// "31s". Usar esse valor real é bem mais preciso que qualquer backoff
+// calculado às cegas no cliente.
+function parseRetryDelayMs(errText){
+  try{
+    const data = JSON.parse(errText);
+    const details = data && data.error && data.error.details;
+    if(Array.isArray(details)){
+      for(const d of details){
+        if(d && d.retryDelay){
+          const m = /([\d.]+)\s*s/.exec(String(d.retryDelay));
+          if(m) return Math.ceil(parseFloat(m[1]) * 1000);
+        }
+      }
+    }
+  } catch(e){ /* corpo não é JSON ou não tem os detalhes — ignora e usa o padrão */ }
+  return null;
 }
 
 async function callGemini(apiKey, model, systemInstruction, userMsg, maxTokens){
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.6 }
-    })
-  });
-  if(!res.ok){
-    const errText = await res.text();
-    const err = new Error(`Erro da API (${res.status}): ${errText.slice(0,220)}`);
-    err.httpStatus = res.status;
+  let res;
+  try{
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: systemInstruction }] },
+        contents: [{ role: "user", parts: [{ text: userMsg }] }],
+        generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.6 }
+      })
+    });
+  } catch(networkErr){
+    // ex: sem internet, DNS falhou, CORS bloqueou — antes isso subia como
+    // exceção não tratada; agora vira um erro normal, retryable
+    const err = new Error(`Falha de rede ao chamar a API do Gemini: ${networkErr.message}`);
+    err.httpStatus = 0;
     throw err;
   }
-  const data = await res.json();
+  if(!res.ok){
+    const errText = await res.text();
+    const retryDelayMs = parseRetryDelayMs(errText);
+    const err = new Error(`Erro da API (${res.status}): ${errText.slice(0,220)}`);
+    err.httpStatus = res.status;
+    if(retryDelayMs) err.retryDelayMs = retryDelayMs;
+    throw err;
+  }
+  let data;
+  try{
+    data = await res.json();
+  } catch(parseErr){
+    throw new Error('A API respondeu algo que não é JSON válido (provável instabilidade momentânea do servidor).');
+  }
   const cand = data.candidates && data.candidates[0];
   if(!cand || !cand.content || !cand.content.parts){
     const reason = cand ? cand.finishReason : 'sem candidatos';
@@ -519,16 +618,31 @@ async function callGemini(apiKey, model, systemInstruction, userMsg, maxTokens){
 async function callWithRetry(model, system, userMsg, maxTokens, onRetry, maxAttempts){
   let lastErr;
   for(let attempt = 1; attempt <= maxAttempts; attempt++){
-    const key = nextKey();
+    const key = await acquireKey((waitSec) => {
+      if(onRetry) onRetry(attempt, maxAttempts, waitSec, 'todas as chaves em descanso por cota, aguardando');
+    });
     try{
       const result = await callGemini(key, model, system, userMsg, maxTokens);
       return { result, key };
     } catch(err){
       lastErr = err;
       if(!isRetryable(err) || attempt === maxAttempts) throw err;
-      const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
-      if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000));
-      await sleep(backoff);
+
+      if(err.httpStatus === 429){
+        // cota estourada é da chave/projeto, não do servidor em geral — só
+        // essa chave descansa (pelo tempo que o próprio Google pediu, se
+        // informado); se sobrar outra chave livre, a próxima tentativa nem
+        // espera nada, já troca de chave na hora
+        const cooldownMs = err.retryDelayMs || 30000;
+        markKeyCooldown(key, cooldownMs);
+        if(onRetry) onRetry(attempt, maxAttempts, Math.round(cooldownMs/1000), 'chave em descanso por cota, trocando');
+      } else {
+        // 503 / sobrecarga é do servidor, não da chave específica — espera
+        // curta com backoff crescente e tenta de novo
+        const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
+        if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000), 'servidor ocupado, tentando de novo');
+        await sleep(backoff);
+      }
     }
   }
   throw lastErr;
@@ -626,21 +740,22 @@ async function runPipeline(){
 
   const n = apiKeys.length;
   const solo = n === 1;
+  const pace = pacingFor(model); // intervalo entre chamadas ajustado ao modelo escolhido
 
   // chamada "de linha" (usada pelas 8 etapas fixas, atualiza a etapa numerada inteira)
   async function stage(num, label, system, userMsg, maxTokens){
     setStage(num, `<span class="spinner"></span> ${label}`, 'active');
     try{
       const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 8192,
-        (attempt, max, waitSec) => setStage(num,
-          `<span class="spinner"></span> servidor ocupado, tentando de novo (${attempt}/${max}) em ${waitSec}s`,
+        (attempt, max, waitSec, reason) => setStage(num,
+          `<span class="spinner"></span> ${reason || 'tentando de novo'} (${attempt}/${max}) em ${waitSec}s`,
           'active'),
-        6
+        8
       );
       markKeyUsed(num, key);
       showOut(num, out);
       setStage(num, 'concluído', 'done');
-      if(solo) await sleep(2200);
+      if(solo) await sleep(pace);
       return out;
     } catch(err){
       setStage(num, 'erro', 'error');
@@ -650,14 +765,14 @@ async function runPipeline(){
   }
 
   // chamada "de linha de função" (usada dentro da etapa 4, atualiza uma linha da lista dinâmica)
-  async function funcCall(rowIndex, system, userMsg, maxTokens, statusPrefix){
+  async function funcCall(rowIndex, system, userMsg, maxTokens){
     const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 4096,
-      (attempt, max, waitSec) => setFuncRowStatus(rowIndex, 'active',
-        `servidor ocupado, tentativa ${attempt}/${max} em ${waitSec}s`),
-      6
+      (attempt, max, waitSec, reason) => setFuncRowStatus(rowIndex, 'active',
+        `${reason || 'tentando de novo'} (${attempt}/${max}) em ${waitSec}s`),
+      8
     );
     markFuncRowKey(rowIndex, key);
-    if(solo) await sleep(1600);
+    if(solo) await sleep(Math.round(pace * 0.7));
     return out;
   }
 
