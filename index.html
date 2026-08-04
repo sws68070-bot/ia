@@ -233,7 +233,7 @@
   <header>
     <div class="eyebrow">Linha de montagem — equipe de IAs <span class="tag">Gemini · multi-chave</span> <span class="tag">lista dinâmica</span></div>
     <h1>Cada IA faz uma parte do arquivo</h1>
-    <div class="sub">Você descreve o que quer construir. Duas IAs planejam de forma independente e uma terceira funde as duas listas numa lista final — sem limite de quantas funções, cada uma já com uma estimativa de linhas de código. Depois, cada função implementada é testada junto com todas as anteriores antes de seguir pra próxima, então integração, auditoria letra por letra, teste final e resposta.</div>
+    <div class="sub">Você descreve o que quer construir. Duas IAs planejam de forma independente e uma terceira funde as duas listas numa lista final — sem limite de quantas funções, cada uma já com uma estimativa de linhas de código. Depois, cada função implementada é testada junto com todas as anteriores antes de seguir pra próxima, então integração, uma verificação final básica (sintaxe + se atende ao pedido, sem ler letra por letra pra economizar cota) e resposta.</div>
   </header>
 
   <div class="setup">
@@ -275,7 +275,7 @@
 
   <div class="progress-wrap">
     <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
-    <div class="progress-label" id="progressLabel">0/8 etapas concluídas</div>
+    <div class="progress-label" id="progressLabel">0/7 etapas concluídas</div>
   </div>
 
   <div class="pipeline" id="pipeline"></div>
@@ -298,9 +298,8 @@ const STAGES = [
   {n:3, title:"Reconciliação — as duas IAs se juntam", role:"consenso · lista final sem limite de tamanho"},
   {n:4, title:"Implementação das funções", role:"código · cada função testada com as anteriores ao ser adicionada"},
   {n:5, title:"Junta tudo num arquivo só", role:"integração"},
-  {n:6, title:"Auditoria letra por letra", role:"revisão minuciosa"},
-  {n:7, title:"Teste final contra o pedido original", role:"QA"},
-  {n:8, title:"Resposta final para você", role:"entrega"},
+  {n:6, title:"Verificação final básica", role:"checagem rápida de sintaxe e se atende ao pedido — não letra por letra, pra economizar cota"},
+  {n:7, title:"Resposta final para você", role:"entrega"},
 ];
 const IMPL_STAGE = 4;
 
@@ -731,13 +730,11 @@ function SYS_FIX_FUNCTION(fn){
 
 const SYS_INTEGRATE = "Você é o integrador. Pegue os pedaços de código JavaScript fornecidos (uma função por bloco, já todas verificadas em conjunto) e monte UM ÚNICO arquivo HTML completo e funcional (com <!DOCTYPE html>, <head>, <body>, CSS básico pra ficar apresentável, e as funções dentro de uma tag <script> no final, conectadas a botões/inputs de interface simples que cubram todas as funções da lista). Corrija qualquer conflito de nomes remanescente. Responda só com o código completo dentro de um bloco ```html.";
 
-const SYS_METICULOUS = "Você é o auditor mais minucioso da equipe. Releia o arquivo HTML final praticamente caractere por caractere: confira cada tag HTML aberta e fechada corretamente, cada chave, parêntese e colchete do JavaScript, cada aspas simples, dupla ou template literal fechada do jeito certo, ponto e vírgula faltando ou sobrando, vírgulas erradas, nomes de variáveis e funções usados de forma consistente do início ao fim do arquivo, e se a lógica de cada função bate exatamente com o que foi planejado. Trate isso como uma revisão de prova tipográfica, não como uma leitura corrida. Se achar QUALQUER problema, mesmo mínimo, responda começando com 'ERRO ENCONTRADO:' seguido da lista exata de cada problema e onde ele está. Se estiver absolutamente tudo certo, responda só 'STATUS: OK'.";
+const SYS_FIX_FILE = "Você está revisando o arquivo com toda a equipe reunida (planejamento, implementação, verificação contínua, integração e verificação final, tudo no seu contexto). Um problema foi apontado. Corrija o arquivo HTML completo e devolva a versão corrigida inteira, sem comentários fora do código. Responda só com o código dentro de um bloco ```html.";
 
-const SYS_FIX_FILE = "Você está revisando o arquivo com toda a equipe reunida (planejamento, implementação, verificação contínua, integração, auditoria e teste, tudo no seu contexto). Um problema foi apontado. Corrija o arquivo HTML completo e devolva a versão corrigida inteira, sem comentários fora do código. Responda só com o código dentro de um bloco ```html.";
+const SYS_FINAL_CHECK = "Você é o revisor final — a ideia aqui é uma checagem BÁSICA e rápida, não uma auditoria caractere por caractere (a equipe já verificou cada função durante a implementação, isso aqui é só uma última conferência antes de entregar, pra não gastar cota gratuita da API à toa). Leia o pedido original, a lista final de funções e o arquivo HTML final, e confira só o que realmente quebraria o arquivo ou deixaria de atender ao pedido: tags HTML essenciais fechadas, chaves/parênteses/colchetes do JavaScript batendo, nenhum erro óbvio de sintaxe (variável não definida, função chamada com nome errado), e se as funções principais pedidas realmente estão presentes e conectadas na interface. Não aponte estilo, nomenclatura ou preferências cosméticas — só problemas reais de funcionamento. Se achar algum problema real, responda começando com 'ERRO ENCONTRADO:' seguido da lista objetiva de cada um. Se estiver funcional e atendendo ao pedido, responda só 'STATUS: OK'.";
 
-const SYS_TEST = "Você é o testador final. Leia o pedido original do usuário, a lista final de funções planejadas, e o arquivo HTML final. Confira linha por linha se o arquivo realmente atende ao pedido e se não tem nenhum erro de JavaScript (parênteses, chaves, ponto e vírgula, variáveis não definidas, funções chamadas com nome errado). Se achar QUALQUER erro, mesmo pequeno, responda começando com 'ERRO ENCONTRADO:' seguido da explicação exata. Se estiver tudo certo, responda só 'STATUS: APROVADO'.";
-
-const SYS_DELIVER = "Você é quem entrega o projeto pro usuário final. Com base em tudo que foi construído (pedido original, lista final de funções, quantas foram corrigidas durante a verificação contínua, auditoria minuciosa e teste funcional), escreva uma resposta curta e direta em português explicando o que foi entregue, quantas funções o arquivo tem, como usar, e se algo foi corrigido durante o processo. Não repita o código, só explique.";
+const SYS_DELIVER = "Você é quem entrega o projeto pro usuário final. Com base em tudo que foi construído (pedido original, lista final de funções, quantas foram corrigidas durante a verificação contínua, e o resultado da verificação final básica), escreva uma resposta curta e direta em português explicando o que foi entregue, quantas funções o arquivo tem, como usar, e se algo foi corrigido durante o processo. Não repita o código, só explique.";
 
 // ---------- execução do pipeline ----------
 
@@ -868,7 +865,7 @@ async function runPipeline(){
       } else if(ok){
         setFuncRowStatus(i, 'done', `corrigida e aceita (${attempt} tentativas)`);
       } else {
-        setFuncRowStatus(i, 'error', 'não resolveu em 3 tentativas — seguiu assim mesmo, a auditoria final ainda vai pegar isso');
+        setFuncRowStatus(i, 'error', 'não resolveu em 3 tentativas — seguiu assim mesmo, a verificação final ainda vai pegar isso');
       }
     }
 
@@ -881,41 +878,28 @@ async function runPipeline(){
     let finalFile = extractCode(mergedRaw);
     showOut(5, finalFile);
 
-    // Etapa 6: auditoria letra por letra — antes de qualquer resposta ser gerada
-    let meticulous = await stage(6, 'revisando letra por letra', SYS_METICULOUS,
-      `ARQUIVO PARA AUDITORIA:\n${finalFile}`, 4096);
+    // Etapa 6: verificação final básica — uma checagem rápida só, não letra
+    // por letra (a equipe já validou cada função durante a implementação),
+    // pra gastar bem menos cota nessa reta final
+    let finalCheck = await stage(6, 'verificação final básica', SYS_FINAL_CHECK,
+      `PEDIDO ORIGINAL: ${userPrompt}\n\n${mergedList}\n\nARQUIVO FINAL:\n${finalFile}`, 2048);
 
-    if(meticulous.trim().toUpperCase().startsWith('ERRO')){
+    if(finalCheck.trim().toUpperCase().startsWith('ERRO')){
       setStage(6, 'problema encontrado — corrigindo', 'error');
       const fixedRaw = await stage(6, 'corrigindo', SYS_FIX_FILE,
-        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM PROBLEMAS:\n${finalFile}\n\nPROBLEMAS ENCONTRADOS NA AUDITORIA:\n${meticulous}`, 32768);
+        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM PROBLEMAS:\n${finalFile}\n\nPROBLEMAS ENCONTRADOS NA VERIFICAÇÃO FINAL:\n${finalCheck}`, 32768);
       finalFile = extractCode(fixedRaw);
-      showOut(6, meticulous + "\n\n— CORRIGIDO —\n\n" + finalFile);
+      showOut(6, finalCheck + "\n\n— CORRIGIDO —\n\n" + finalFile);
       setStage(6, 'corrigido', 'done');
     } else {
       setStage(6, 'aprovado', 'done');
     }
 
-    // Etapa 7: teste funcional final contra o pedido original
-    let testResult = await stage(7, 'testando', SYS_TEST,
-      `${mergedList}\n\nARQUIVO FINAL:\n${finalFile}`, 4096);
-
-    if(testResult.trim().toUpperCase().startsWith('ERRO')){
-      setStage(7, 'erro encontrado — corrigindo', 'error');
-      const fixedRaw2 = await stage(7, 'corrigindo', SYS_FIX_FILE,
-        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM ERRO:\n${finalFile}\n\nERRO REPORTADO PELO TESTE:\n${testResult}`, 32768);
-      finalFile = extractCode(fixedRaw2);
-      showOut(7, testResult + "\n\n— CORRIGIDO —\n\n" + finalFile);
-      setStage(7, 'corrigido', 'done');
-    } else {
-      setStage(7, 'aprovado', 'done');
-    }
-
     runState.finalCode = finalFile;
 
-    // Etapa 8: resposta final
-    const finalMsg = await stage(8, 'escrevendo resposta', SYS_DELIVER,
-      `${mergedList}\n\nRESULTADO DA AUDITORIA MINUCIOSA:\n${meticulous}\n\nRESULTADO DO TESTE FINAL:\n${testResult}`, 2048);
+    // Etapa 7: resposta final
+    const finalMsg = await stage(7, 'escrevendo resposta', SYS_DELIVER,
+      `${mergedList}\n\nRESULTADO DA VERIFICAÇÃO FINAL:\n${finalCheck}`, 2048);
 
     document.getElementById('finalText').textContent = finalMsg;
     document.getElementById('finalBox').classList.add('show');
