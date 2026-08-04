@@ -197,7 +197,7 @@
     <div id="keysList"></div>
     <button class="btn-add" id="addKeyBtn">+ adicionar chave</button>
     <div class="keys-note">
-      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção — por isso não há limite real de linhas (funciona para 9000+ linhas ou no modo infinito), e a verificação final é feita em lotes pequenos para não gastar tudo de uma vez. Trate suas chaves como senhas.
+      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção até chegar perto da meta de linhas (sem ficar propondo seções novas depois disso), e a verificação final roda uma única vez, básica, só para pegar erros que realmente quebram o código — não fica revisando e corrigindo em loop. Trate suas chaves como senhas.
     </div>
   </section>
 
@@ -248,7 +248,7 @@
       </div>
       <div class="field">
         <label>Tamanho do lote de verificação (linhas por chamada)</label>
-        <input type="number" id="verifyChunkLines" value="800" min="200" step="100">
+        <input type="number" id="verifyChunkLines" value="1500" min="200" step="100">
       </div>
     </div>
   </section>
@@ -503,7 +503,7 @@ ${brief}
 """
 
 Tipo de arquivo: ${fileType}
-Meta: pelo menos ${targetLines} linhas de código funcional no total, dividido em seções pequenas.
+Meta: aproximadamente ${targetLines} linhas de código funcional no total — é um alvo, não um mínimo a estourar. Não planeje muito mais do que isso.
 
 Responda APENAS com um JSON neste formato exato:
 {
@@ -513,7 +513,7 @@ Responda APENAS com um JSON neste formato exato:
   "secoes": [{"nome":"nome_curto_em_snake_case","descricao":"o que essa seção/função deve conter e fazer, incluindo quais itens do arquivoBase ela implementa ou consome"}]
 }
 
-Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chegar perto da meta de linhas, mantendo coerência entre elas. Não escreva nada fora do JSON.`;
+Planeje o número de seções e o tamanho aproximado de cada uma para que a SOMA fique perto da meta (~80-150 linhas por seção como referência) — não crie seções demais nem funções fora do que a tarefa pede, isso só gasta tokens à toa e aumenta a chance de bugs de integração. Só inclua funções que a tarefa do usuário realmente precisa. Não escreva nada fora do JSON.`;
 
       const planRaw = await callGemini(planner, planPrompt, {json:true, maxTokens:4096, temperature:0.5});
       const plan = parseJsonLoose(planRaw);
@@ -531,13 +531,20 @@ Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chega
 
       // 2) GERAÇÃO POR SEÇÃO (com expansão até atingir a meta de linhas, ou infinita até "parar")
       const infiniteMode = document.getElementById('infiniteMode').checked;
-      const MAX_ROUNDS = infiniteMode ? 100000 : 200; // trava de segurança, não um limite prático de linhas
+      state.targetLines = targetLines;
+      state.infiniteMode = infiniteMode;
+      // Trava de segurança bem mais curta: o objetivo é parar perto da meta,
+      // não ficar pedindo seções novas até o plano ou a cota da API acabarem.
+      const MAX_ROUNDS = infiniteMode ? 100000 : 10;
       let round = 0;
       while(!state.stopRequested && round < MAX_ROUNDS){
         await generatePendingSections(fileType);
         const totalLines = countLines();
         setProgress(20 + Math.min(50, (totalLines/targetLines)*50), `${totalLines} / ${infiniteMode ? '∞' : targetLines} linhas geradas...`);
-        if((!infiniteMode && totalLines >= targetLines) || state.stopRequested) break;
+        // Para no modo normal assim que a meta é atingida (com uma pequena folga),
+        // e não deixa o gap residual pequeno disparar mais uma rodada inteira.
+        const closeEnough = !infiniteMode && totalLines >= targetLines * 0.95;
+        if(closeEnough || state.stopRequested) break;
         round++;
         log(`Linhas até agora: ${totalLines}${infiniteMode ? '' : '/'+targetLines}. Pedindo mais seções ao planejador...`, {cls:'hl'});
         const more = nextKey('gen');
@@ -546,7 +553,8 @@ Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chega
         const recentNames = state.sections.slice(-25).map(s => s.name).join(', ');
         const gap = infiniteMode ? null : Math.max(0, targetLines - totalLines);
         const avgLinesPerSection = totalLines > 0 ? Math.max(20, Math.round(totalLines / state.sections.length)) : 60;
-        const suggestedCount = infiniteMode ? 8 : Math.min(20, Math.max(3, Math.ceil(gap / avgLinesPerSection)));
+        // Máximo de seções pedidas por rodada bem menor, para não estourar a meta de uma vez.
+        const suggestedCount = infiniteMode ? 6 : Math.min(6, Math.max(2, Math.ceil(gap / avgLinesPerSection)));
         const morePrompt = `O arquivo (tipo ${fileType}) sobre o seguinte projeto ainda está incompleto:
 """
 ${state.command}
@@ -581,14 +589,12 @@ Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
         return;
       }
 
-      // 3) VERIFICAÇÃO + CORREÇÃO
-      setProgress(75, 'revisando o arquivo com os agentes verificadores...');
-      let verifyRound = 0;
-      const maxVerifyRounds = state.sections.length > 60 ? 6 : 3;
-      while(!state.stopRequested && verifyRound < maxVerifyRounds){
-        const stillOk = await verifyAndFix(fileType);
-        verifyRound++;
-        if(stillOk) break;
+      // 3) VERIFICAÇÃO BÁSICA — só uma vez, com o código já pronto.
+      // Em vez de ficar verificando e reverificando (o que consome muitos tokens),
+      // roda uma única passada: encontra problemas óbvios, corrige e encerra.
+      setProgress(75, 'revisão básica final do arquivo...');
+      if(!state.stopRequested){
+        await verifyAndFix(fileType);
       }
 
       // 4) FINALIZAÇÃO
@@ -633,7 +639,10 @@ Regras para a geração das funções desta seção:
 - Não repita código de outras seções nem redefina uma função que outra seção já deve declarar.
 - Responda SOMENTE com código, sem markdown, sem blocos \`\`\`, sem explicações antes ou depois.`;
     try{
-      const code = await callGemini(agent, prompt, {json:false, maxTokens:8192, temperature:0.4});
+      // Limita o orçamento de tokens da seção à sua "fatia justa" da meta de linhas,
+      // em vez de sempre pedir o máximo — evita seções infladas que estouram o alvo.
+      const maxTokens = sectionTokenBudget();
+      const code = await callGemini(agent, prompt, {json:false, maxTokens, temperature:0.4});
       sec.code = stripFences(code);
       sec.status = 'done';
     }catch(e){
@@ -641,6 +650,16 @@ Regras para a geração das funções desta seção:
       log(`Falha ao gerar "${sec.name}": ${e.message}`, {cls:'err'});
     }
     renderChips();
+  }
+
+  // Estima quantos tokens uma seção deve receber com base na meta de linhas e no
+  // número de seções já planejadas, para não gerar seções muito maiores que o necessário.
+  function sectionTokenBudget(){
+    if(state.infiniteMode || !state.targetLines || !state.sections.length) return 8192;
+    const plannedCount = Math.max(1, state.sections.length);
+    const linesPerSection = Math.max(30, Math.min(220, Math.ceil((state.targetLines / plannedCount) * 1.4)));
+    const tokens = linesPerSection * 16; // ~16 tokens por linha de código, com folga
+    return Math.max(1024, Math.min(8192, tokens));
   }
 
   // Gera as seções pendentes em lotes paralelos — várias chaves/agentes trabalham
@@ -716,7 +735,8 @@ Regras para a geração das funções desta seção:
     const cp = commentPrefix(fileType);
     const code = chunkSecs.map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`).join('\n\n');
     log(`Verificando lote com ${chunkSecs.length} seção(ões)...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
-    const prompt = `Você é o agente verificador, dedicado a manter a qualidade do arquivo. Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e procure erros de sintaxe, bugs lógicos, referências quebradas ou inconsistências dentro deste trecho.
+    const prompt = `Você é o agente verificador. Esta é a única passada de revisão deste arquivo (revisão básica, não precisa ser exaustiva). Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e aponte SOMENTE problemas que realmente quebram o código: erro de sintaxe, função/variável usada mas nunca definida, chamada com assinatura errada, ou referência quebrada.
+Ignore preferências de estilo, otimizações ou coisas que "poderiam ser melhores" — só reporte o que de fato impede o código de funcionar.
 ${state.baseFile ? `Verifique também se o trecho respeita este contrato de nomes/assinaturas compartilhado entre os agentes; um nome ou assinatura de função diferente do contrato conta como problema:\n"""\n${state.baseFile}\n"""\n` : ''}
 As seções estão marcadas por comentários indicando o nome de cada uma.
 
