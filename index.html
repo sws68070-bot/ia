@@ -396,6 +396,32 @@ function showOut(n, text){
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
+function isRetryable(err){
+  if(err.httpStatus === 503 || err.httpStatus === 429) return true;
+  return /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(err.message || '');
+}
+
+// Tenta de novo em caso de sobrecarga (503) ou limite de taxa (429), com espera
+// crescente entre tentativas. A cada nova tentativa usa a próxima chave do
+// rodízio — se você tiver mais de uma chave, isso já ajuda a contornar o problema.
+async function callWithRetry(model, system, userMsg, onRetry, maxAttempts){
+  let lastErr;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    const key = nextKey();
+    try{
+      const result = await callGemini(key, model, system, userMsg);
+      return { result, key };
+    } catch(err){
+      lastErr = err;
+      if(!isRetryable(err) || attempt === maxAttempts) throw err;
+      const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
+      if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000));
+      await sleep(backoff);
+    }
+  }
+  throw lastErr;
+}
+
 async function sequentially(tasks){
   const results = [];
   for(const t of tasks) results.push(await t());
@@ -417,7 +443,9 @@ async function callGemini(apiKey, model, systemInstruction, userMsg){
   });
   if(!res.ok){
     const errText = await res.text();
-    throw new Error(`Erro da API (${res.status}): ${errText.slice(0,220)}`);
+    const err = new Error(`Erro da API (${res.status}): ${errText.slice(0,220)}`);
+    err.httpStatus = res.status;
+    throw err;
   }
   const data = await res.json();
   const cand = data.candidates && data.candidates[0];
@@ -480,10 +508,15 @@ async function runPipeline(){
 
   async function stage(num, label, system, userMsg){
     setStage(num, `<span class="spinner"></span> ${label}`, 'active');
-    const key = nextKey();
-    markKeyUsed(num, key);
     try{
-      const out = await callGemini(key, model, system, userMsg);
+      const { result: out, key } = await callWithRetry(
+        model, system, userMsg,
+        (attempt, max, waitSec) => setStage(num,
+          `<span class="spinner"></span> servidor ocupado, tentando de novo (${attempt}/${max}) em ${waitSec}s`,
+          'active'),
+        6
+      );
+      markKeyUsed(num, key);
       showOut(num, out);
       setStage(num, 'concluído', 'done');
       if(solo) await sleep(2200);
