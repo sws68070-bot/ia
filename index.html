@@ -30,20 +30,20 @@
     background-image: radial-gradient(circle at 15% 0%, rgba(224,164,88,.06), transparent 45%),
                        radial-gradient(circle at 100% 20%, rgba(111,159,217,.05), transparent 40%);
   }
-  .wrap{max-width:1000px; margin:0 auto; padding:32px 20px 90px;}
+  .wrap{max-width:1020px; margin:0 auto; padding:32px 20px 90px;}
 
   header{margin-bottom:26px;}
   .eyebrow{
     font-family:var(--mono); font-size:11px; letter-spacing:.14em;
     color:var(--amber); text-transform:uppercase; margin-bottom:8px;
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
   }
   .eyebrow .tag{
     background:rgba(160,143,224,.12); color:var(--purple); border:1px solid rgba(160,143,224,.35);
     border-radius:20px; padding:2px 9px; font-size:10px; letter-spacing:.06em;
   }
   h1{font-size:25px; margin:0 0 6px; font-weight:650; letter-spacing:-.01em;}
-  .sub{color:var(--dim); font-size:13.5px; max-width:600px;}
+  .sub{color:var(--dim); font-size:13.5px; max-width:640px;}
 
   .setup{
     background:var(--panel); border:1px solid var(--line); border-radius:12px;
@@ -169,6 +169,39 @@
   }
   .toggle.show{display:inline-block;}
 
+  /* lista dinâmica de funções dentro da etapa de implementação */
+  .func-list{
+    margin-top:10px; display:none; flex-direction:column; gap:6px;
+    max-height:340px; overflow-y:auto; padding-right:4px;
+  }
+  .func-list.show{display:flex;}
+  .func-row{
+    display:flex; align-items:center; gap:9px; background:var(--panel-2);
+    border:1px solid var(--line); border-radius:7px; padding:7px 10px;
+    font-size:11.5px; transition:.2s;
+  }
+  .func-row.active{border-color:var(--amber); background:#1a1408;}
+  .func-row.drafted{border-color:var(--blue);}
+  .func-row.done{border-color:var(--green); background:#0f1a13;}
+  .func-row.error{border-color:var(--red); background:#1c0f0e;}
+  .func-dot{
+    width:8px; height:8px; border-radius:50%; background:var(--line-2); flex-shrink:0;
+  }
+  .func-row.active .func-dot{background:var(--amber); box-shadow:0 0 0 3px rgba(224,164,88,.18);}
+  .func-row.drafted .func-dot{background:var(--blue);}
+  .func-row.done .func-dot{background:var(--green);}
+  .func-row.error .func-dot{background:var(--red);}
+  .func-name{font-family:var(--mono); font-weight:600; white-space:nowrap;}
+  .func-lines{
+    font-family:var(--mono); font-size:10px; color:var(--dim); background:var(--bg);
+    border:1px solid var(--line); border-radius:20px; padding:1px 7px; flex-shrink:0;
+  }
+  .func-key{
+    font-family:var(--mono); font-size:9.5px; color:var(--purple); display:none; flex-shrink:0;
+  }
+  .func-key.show{display:inline-block;}
+  .func-status{color:var(--dim); margin-left:auto; font-family:var(--mono); font-size:10.5px; text-align:right;}
+
   .final{
     margin-top:26px; background:var(--panel); border:1px solid var(--green);
     border-radius:12px; padding:20px; display:none;
@@ -198,9 +231,9 @@
 <div class="wrap">
 
   <header>
-    <div class="eyebrow">Linha de montagem — 11 chamadas <span class="tag">Gemini · multi-chave</span></div>
+    <div class="eyebrow">Linha de montagem — equipe de IAs <span class="tag">Gemini · multi-chave</span> <span class="tag">lista dinâmica</span></div>
     <h1>Cada IA faz uma parte do arquivo</h1>
-    <div class="sub">Você descreve o que quer construir. Onze chamadas à API do Gemini, cada uma com um papel fixo — planejar, codar, verificar, integrar, auditar letra por letra, testar e responder — trabalham em sequência (ou em paralelo, se você tiver chaves suficientes) no mesmo pedido.</div>
+    <div class="sub">Você descreve o que quer construir. Duas IAs planejam de forma independente e uma terceira funde as duas listas numa lista final — sem limite de quantas funções, cada uma já com uma estimativa de linhas de código. Depois, cada função implementada é testada junto com todas as anteriores antes de seguir pra próxima, então integração, auditoria letra por letra, teste final e resposta.</div>
   </header>
 
   <div class="setup">
@@ -237,12 +270,12 @@
       </div>
     </div>
     <button class="run" id="runBtn" onclick="runPipeline()">Rodar a linha de montagem</button>
-    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As 11 etapas revezam entre as chaves que você adicionar; com poucas chaves, a mesma é reaproveitada mais vezes (com pausas entre chamadas pra respeitar o limite gratuito). O processo todo pode levar alguns minutos.</div>
+    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As chamadas revezam entre as chaves que você adicionar; com mais chaves, mais coisa roda em paralelo de verdade (as IAs "trabalhando juntas" ao mesmo tempo) e mais rápido a linha de montagem termina. Com poucas chaves, a mesma é reaproveitada mais vezes, com pausas e reenvio automático se o servidor do Gemini estiver sobrecarregado (503). O processo pode levar de alguns minutos a bem mais, dependendo de quantas funções a lista final tiver.</div>
   </div>
 
   <div class="progress-wrap">
     <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
-    <div class="progress-label" id="progressLabel">0/11 etapas concluídas</div>
+    <div class="progress-label" id="progressLabel">0/8 etapas concluídas</div>
   </div>
 
   <div class="pipeline" id="pipeline"></div>
@@ -260,18 +293,16 @@
 
 <script>
 const STAGES = [
-  {n:1, title:"Lista de funções — versão A", role:"planejamento"},
-  {n:2, title:"Lista de funções — versão B", role:"planejamento (segunda opinião)"},
-  {n:3, title:"Implementa função 1", role:"código"},
-  {n:4, title:"Implementa função 2", role:"código"},
-  {n:5, title:"Implementa função 3", role:"código"},
-  {n:6, title:"Verificação — bate com a lista?", role:"revisão"},
-  {n:7, title:"Verificação — segunda revisão", role:"revisão"},
-  {n:8, title:"Junta tudo num arquivo só", role:"integração"},
-  {n:9, title:"Auditoria letra por letra", role:"revisão minuciosa"},
-  {n:10, title:"Teste final contra o pedido original", role:"QA"},
-  {n:11, title:"Resposta final para você", role:"entrega"},
+  {n:1, title:"Lista de funções — versão A", role:"planejamento (com estimativa de linhas)"},
+  {n:2, title:"Lista de funções — versão B", role:"planejamento independente (segunda opinião)"},
+  {n:3, title:"Reconciliação — as duas IAs se juntam", role:"consenso · lista final sem limite de tamanho"},
+  {n:4, title:"Implementação das funções", role:"código · cada função testada com as anteriores ao ser adicionada"},
+  {n:5, title:"Junta tudo num arquivo só", role:"integração"},
+  {n:6, title:"Auditoria letra por letra", role:"revisão minuciosa"},
+  {n:7, title:"Teste final contra o pedido original", role:"QA"},
+  {n:8, title:"Resposta final para você", role:"entrega"},
 ];
+const IMPL_STAGE = 4;
 
 let apiKeys = [];
 let keyIndex = 0;
@@ -317,10 +348,10 @@ function updateModeBadge(){
   }
   badge.className = 'mode-badge';
   let msg;
-  if(n===1) msg = `<b>1 chave</b> — as 11 etapas rodam em sequência, todas usando a mesma chave, com pausas entre chamadas pra não estourar o limite gratuito.`;
-  else if(n===2) msg = `<b>${n} chaves</b> — planejamento (etapas 1-2) e as duas revisões (6-7) rodam em paralelo, revezando entre as chaves. Implementação ainda sequencial.`;
-  else if(n<5) msg = `<b>${n} chaves</b> — planejamento, revisões e as 3 implementações de função rodam em paralelo, cada chamada numa chave diferente.`;
-  else msg = `<b>${n} chaves</b> — quase tudo roda em paralelo: as 2 listas, as 3 implementações e as 2 revisões, cada uma na sua própria chave. A linha de montagem inteira fica bem mais rápida.`;
+  if(n===1) msg = `<b>1 chave</b> — tudo roda em sequência, todas as chamadas usando a mesma chave, com pausas entre elas pra não estourar o limite gratuito. Ainda assim cada função é testada junto com as anteriores antes de seguir.`;
+  else if(n===2) msg = `<b>${n} chaves</b> — as 2 listas de planejamento rodam em paralelo, cada uma na sua chave. O rascunho das funções também roda em lotes de 2 ao mesmo tempo, mas a verificação continua sequencial (uma função de cada vez, testada com tudo que já foi aceito).`;
+  else if(n<6) msg = `<b>${n} chaves</b> — planejamento em paralelo, e o rascunho de várias funções acontece ao mesmo tempo em lotes de ${n}, usando as chaves simultaneamente. A verificação continua função por função, sempre testando o acumulado.`;
+  else msg = `<b>${n} chaves</b> — bastante coisa roda ao mesmo tempo: planejamento em paralelo e rascunho de até ${n} funções simultâneas por lote, cada chamada na sua própria chave. A parte de verificação continua sequencial de propósito, pra garantir que cada função nova é testada com tudo que já foi aceito antes de seguir — isso não é paralelizável sem risco de erro passar despercebido.`;
   badge.innerHTML = msg;
 }
 
@@ -348,9 +379,11 @@ function renderStages(){
         <div class="stage-role">${s.role}</div>
         <div class="stage-out" id="out-${s.n}"></div>
         <span class="toggle" id="toggle-${s.n}" onclick="toggleOut(${s.n})">ver saída ▾</span>
+        ${s.n === IMPL_STAGE ? `<div class="func-list" id="funcList"></div>` : ''}
       </div>
     </div>
   `).join('');
+  document.getElementById('progressLabel').textContent = `0/${STAGES.length} etapas concluídas`;
 }
 renderStages();
 
@@ -394,33 +427,41 @@ function showOut(n, text){
   document.getElementById(`toggle-${n}`).classList.add('show');
 }
 
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- lista dinâmica de funções (dentro da etapa 4) ----------
+
+function renderFuncList(functionList){
+  const el = document.getElementById('funcList');
+  el.classList.add('show');
+  el.innerHTML = functionList.map((fn,i)=>`
+    <div class="func-row" id="func-row-${i}">
+      <span class="func-dot"></span>
+      <span class="func-name">${escapeHtml(fn.name)}</span>
+      <span class="func-lines">~${fn.lines}L</span>
+      <span class="func-key" id="func-key-${i}"></span>
+      <span class="func-status" id="func-status-${i}">aguardando</span>
+    </div>
+  `).join('');
+}
+
+function setFuncRowStatus(i, cls, text){
+  const row = document.getElementById(`func-row-${i}`);
+  if(!row) return;
+  row.classList.remove('active','done','error','drafted');
+  if(cls) row.classList.add(cls);
+  document.getElementById(`func-status-${i}`).textContent = text;
+}
+
+function markFuncRowKey(i, key){
+  const el = document.getElementById(`func-key-${i}`);
+  el.textContent = maskKey(key);
+  el.classList.add('show');
+}
+
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-function isRetryable(err){
-  if(err.httpStatus === 503 || err.httpStatus === 429) return true;
-  return /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(err.message || '');
-}
-
-// Tenta de novo em caso de sobrecarga (503) ou limite de taxa (429), com espera
-// crescente entre tentativas. A cada nova tentativa usa a próxima chave do
-// rodízio — se você tiver mais de uma chave, isso já ajuda a contornar o problema.
-async function callWithRetry(model, system, userMsg, onRetry, maxAttempts){
-  let lastErr;
-  for(let attempt = 1; attempt <= maxAttempts; attempt++){
-    const key = nextKey();
-    try{
-      const result = await callGemini(key, model, system, userMsg);
-      return { result, key };
-    } catch(err){
-      lastErr = err;
-      if(!isRetryable(err) || attempt === maxAttempts) throw err;
-      const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
-      if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000));
-      await sleep(backoff);
-    }
-  }
-  throw lastErr;
-}
 
 async function sequentially(tasks){
   const results = [];
@@ -428,9 +469,25 @@ async function sequentially(tasks){
   return results;
 }
 
-// ---------- chamada à API do Gemini ----------
+// executa tarefas em lotes do tamanho informado, todas ao mesmo tempo dentro de cada lote
+async function inBatches(tasks, batchSize){
+  const results = new Array(tasks.length);
+  for(let start = 0; start < tasks.length; start += batchSize){
+    const batch = tasks.slice(start, start + batchSize);
+    const batchResults = await Promise.all(batch.map(t => t()));
+    batchResults.forEach((r, idx) => { results[start + idx] = r; });
+  }
+  return results;
+}
 
-async function callGemini(apiKey, model, systemInstruction, userMsg){
+// ---------- chamada à API do Gemini, com retry ----------
+
+function isRetryable(err){
+  if(err.httpStatus === 503 || err.httpStatus === 429) return true;
+  return /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand/i.test(err.message || '');
+}
+
+async function callGemini(apiKey, model, systemInstruction, userMsg, maxTokens){
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
@@ -438,7 +495,7 @@ async function callGemini(apiKey, model, systemInstruction, userMsg){
     body: JSON.stringify({
       system_instruction: { parts: [{ text: systemInstruction }] },
       contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.6 }
+      generationConfig: { maxOutputTokens: maxTokens || 8192, temperature: 0.6 }
     })
   });
   if(!res.ok){
@@ -456,34 +513,98 @@ async function callGemini(apiKey, model, systemInstruction, userMsg){
   return cand.content.parts.map(p => p.text || "").join("\n");
 }
 
+// Tenta de novo em caso de sobrecarga (503) ou limite de taxa (429), com espera
+// crescente entre tentativas. A cada nova tentativa usa a próxima chave do
+// rodízio — se você tiver mais de uma chave, isso já ajuda a contornar o problema.
+async function callWithRetry(model, system, userMsg, maxTokens, onRetry, maxAttempts){
+  let lastErr;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    const key = nextKey();
+    try{
+      const result = await callGemini(key, model, system, userMsg, maxTokens);
+      return { result, key };
+    } catch(err){
+      lastErr = err;
+      if(!isRetryable(err) || attempt === maxAttempts) throw err;
+      const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
+      if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000));
+      await sleep(backoff);
+    }
+  }
+  throw lastErr;
+}
+
 function extractCode(text){
   const match = text.match(/```(?:html|javascript|js)?\n([\s\S]*?)```/);
   return match ? match[1].trim() : text.trim();
 }
 
-// ---------- prompts de sistema de cada etapa ----------
+// tira uma lista de funções (nome, descrição, linhas) do texto que a IA de
+// reconciliação devolveu — tenta JSON primeiro, cai pra um parser de texto
+// numerado se a IA não seguir o formato à risca
+function parseFunctionList(text){
+  let cleaned = text.trim();
+  const fenceMatch = cleaned.match(/```(?:json)?\n([\s\S]*?)```/);
+  if(fenceMatch) cleaned = fenceMatch[1].trim();
 
-const SYS_PLAN_A = "Você é o planejador de um projeto de código. Dado um pedido do usuário, liste exatamente 3 funções principais que o arquivo precisa ter, com uma descrição curta e objetiva de cada uma (o que recebe, o que faz, o que retorna/altera). Responda só com a lista numerada, sem código.";
+  const arrStart = cleaned.indexOf('[');
+  const arrEnd = cleaned.lastIndexOf(']');
+  if(arrStart !== -1 && arrEnd !== -1 && arrEnd > arrStart){
+    try{
+      const parsed = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+      if(Array.isArray(parsed) && parsed.length){
+        return parsed.map(f => ({
+          name: String(f.name || f.nome || 'funcaoSemNome').trim(),
+          description: String(f.description || f.descricao || '').trim(),
+          lines: Math.max(5, Math.min(400, parseInt(f.lines || f.linhas, 10) || 30))
+        }));
+      }
+    } catch(e){ /* cai no parser de texto abaixo */ }
+  }
 
-const SYS_PLAN_B = "Você é um segundo planejador independente, revisando o mesmo pedido do zero (não viu nenhuma outra lista). Liste exatamente 3 funções principais que o arquivo precisa ter, com descrição curta de cada uma. Responda só com a lista numerada, sem código.";
-
-function SYS_IMPL(i){
-  return `Você é o implementador responsável apenas pela FUNÇÃO ${i}. Duas listas de planejamento foram feitas (podem divergir levemente — use seu julgamento pra reconciliar). Escreva SOMENTE o código JavaScript da função ${i} (função pura ou métodos de objeto, como fizer sentido), pronta pra ser colada num arquivo HTML único com <script>. Não escreva HTML, não escreva as outras funções, não explique nada fora do bloco de código. Responda com o código dentro de um bloco \`\`\`javascript.`;
+  const lines = cleaned.split('\n').map(l => l.trim()).filter(Boolean);
+  const re = /^\d+[\.\)]\s*([^—\-:]+)[—\-:]\s*(.*?)(?:[—\-]\s*~?\s*(\d+)\s*linhas?)?$/i;
+  const out = [];
+  for(const l of lines){
+    const m = l.match(re);
+    if(m){
+      out.push({
+        name: m[1].trim(),
+        description: (m[2] || '').trim(),
+        lines: m[3] ? Math.max(5, Math.min(400, parseInt(m[3], 10))) : 30
+      });
+    }
+  }
+  return out;
 }
 
-const SYS_REVIEW_1 = "Você é revisor de código. Compare o código das 3 funções com a lista de planejamento. Aponte objetivamente: (1) se cada função cumpre o que a lista pede, (2) qualquer bug óbvio, (3) inconsistências entre as funções (nomes, parâmetros). Termine com 'STATUS: OK' ou 'STATUS: PROBLEMAS' seguido de uma lista curta dos problemas.";
+// ---------- prompts de sistema de cada etapa ----------
 
-const SYS_REVIEW_2 = "Você é um segundo revisor, independente do primeiro. Revise o mesmo código contra a mesma lista, com foco em: nomes de variáveis conflitantes, funções que dependem de algo que as outras não expõem, e erros de sintaxe JavaScript. Termine com 'STATUS: OK' ou 'STATUS: PROBLEMAS' seguido de uma lista curta.";
+const SYS_PLAN_A = "Você é o planejador de um projeto de código. Dado um pedido do usuário, liste TODAS as funções que o arquivo realmente vai precisar pra cobrir o pedido por completo — não existe limite fixo de quantidade, pode ser 3, pode ser 15, o que for necessário. Para cada função dê: nome (em camelCase), uma descrição curta e objetiva (o que recebe, o que faz, o que retorna/altera), e uma estimativa realista de quantas linhas de código ela deve ter. Responda só com a lista numerada em texto simples, sem código, no formato exato: 'N. nomeDaFuncao — descrição — ~X linhas'.";
 
-const SYS_INTEGRATE = "Você é o integrador. Pegue os pedaços de código JavaScript fornecidos e monte UM ÚNICO arquivo HTML completo e funcional (com <!DOCTYPE html>, <head>, <body>, CSS básico pra ficar apresentável, e as funções dentro de uma tag <script> no final, conectadas a botões/inputs de interface simples). Corrija qualquer conflito de nomes ou inconsistência apontada nas revisões. Responda só com o código completo dentro de um bloco ```html.";
+const SYS_PLAN_B = "Você é um segundo planejador independente, revisando o mesmo pedido do zero (não viu nenhuma outra lista). Liste TODAS as funções que o arquivo realmente vai precisar — sem limite fixo de quantidade, cubra o pedido por completo. Para cada função dê: nome (em camelCase), descrição curta, e estimativa de linhas de código. Responda só com a lista numerada em texto simples, sem código, no formato exato: 'N. nomeDaFuncao — descrição — ~X linhas'.";
+
+const SYS_RECONCILE = "Você é o elo entre os dois planejadores — a etapa onde as duas IAs de planejamento efetivamente se juntam. Funda as duas listas independentes numa lista final única e definitiva: elimine duplicatas, resolva divergências de nome e escopo usando seu julgamento técnico, garanta que a lista cobre o pedido original por completo, sem funções desnecessárias e sem nada faltando. Não existe limite de quantas funções a lista final pode ter — inclua quantas forem realmente necessárias. Para cada função, mantenha uma estimativa realista de linhas de código (ajuste se achar que uma das duas IAs subestimou ou superestimou). Responda SOMENTE com um array JSON válido, sem markdown, sem texto fora do array, no formato exato: [{\"name\":\"nomeDaFuncao\",\"description\":\"descrição curta\",\"lines\":40}]. Nada além do array JSON.";
+
+function SYS_DRAFT(fn){
+  return `Você é o implementador responsável pela função "${fn.name}". Descrição combinada pela equipe de planejamento: ${fn.description}. Ela deve ter aproximadamente ${fn.lines} linhas de código — use esse tamanho como guia real de quanto detalhe e robustez implementar (tratamento de casos extremos, comentários pontuais, validação), nem muito mais curta nem muito mais longa que isso. Escreva SOMENTE o código JavaScript dessa função (função pura ou métodos de objeto, como fizer mais sentido pro papel dela), pronta pra ser colada num arquivo HTML único dentro de uma tag <script>. Não escreva HTML, não escreva outras funções da lista, não explique nada fora do bloco de código. Responda com o código dentro de um bloco \`\`\`javascript.`;
+}
+
+const SYS_CUMULATIVE_CHECK = "Você é o verificador de integração contínua da equipe. Toda vez que uma função nova é adicionada ao projeto, sua tarefa é conferir se TODO o código acumulado até agora — todas as funções já aceitas mais a função recém adicionada — funciona junto sem conflito: nomes de função ou variável duplicados, variáveis globais colidindo, uma função chamando algo que nenhuma outra expõe, parâmetros inconsistentes, erros óbvios de sintaxe JavaScript. Confira também se a função recém adicionada realmente cumpre o que a lista final de funções pede pra ela. Se achar QUALQUER problema, mesmo pequeno, responda começando com 'ERRO ENCONTRADO:' seguido da explicação exata de cada problema. Se estiver tudo certo, responda só 'STATUS: OK'.";
+
+function SYS_FIX_FUNCTION(fn){
+  return `Você está corrigindo apenas a função "${fn.name}" dentro de um projeto maior que está sendo construído por uma equipe de IAs. O restante das funções já aceitas aparece como contexto de referência — não repita elas na resposta, só use pra garantir que sua função encaixa direito. Um problema foi apontado nessa função ou na forma como ela interage com as outras. Reescreva SOMENTE a função "${fn.name}" corrigida, pronta pra substituir a versão anterior. Responda com o código dentro de um bloco \`\`\`javascript, sem nenhuma explicação fora do bloco.`;
+}
+
+const SYS_INTEGRATE = "Você é o integrador. Pegue os pedaços de código JavaScript fornecidos (uma função por bloco, já todas verificadas em conjunto) e monte UM ÚNICO arquivo HTML completo e funcional (com <!DOCTYPE html>, <head>, <body>, CSS básico pra ficar apresentável, e as funções dentro de uma tag <script> no final, conectadas a botões/inputs de interface simples que cubram todas as funções da lista). Corrija qualquer conflito de nomes remanescente. Responda só com o código completo dentro de um bloco ```html.";
 
 const SYS_METICULOUS = "Você é o auditor mais minucioso da equipe. Releia o arquivo HTML final praticamente caractere por caractere: confira cada tag HTML aberta e fechada corretamente, cada chave, parêntese e colchete do JavaScript, cada aspas simples, dupla ou template literal fechada do jeito certo, ponto e vírgula faltando ou sobrando, vírgulas erradas, nomes de variáveis e funções usados de forma consistente do início ao fim do arquivo, e se a lógica de cada função bate exatamente com o que foi planejado. Trate isso como uma revisão de prova tipográfica, não como uma leitura corrida. Se achar QUALQUER problema, mesmo mínimo, responda começando com 'ERRO ENCONTRADO:' seguido da lista exata de cada problema e onde ele está. Se estiver absolutamente tudo certo, responda só 'STATUS: OK'.";
 
-const SYS_FIX = "Você está revisando o arquivo com toda a equipe reunida (planejamento, implementação, revisão, auditoria e teste, tudo no seu contexto). Um problema foi apontado. Corrija o arquivo HTML completo e devolva a versão corrigida inteira, sem comentários fora do código. Responda só com o código dentro de um bloco ```html.";
+const SYS_FIX_FILE = "Você está revisando o arquivo com toda a equipe reunida (planejamento, implementação, verificação contínua, integração, auditoria e teste, tudo no seu contexto). Um problema foi apontado. Corrija o arquivo HTML completo e devolva a versão corrigida inteira, sem comentários fora do código. Responda só com o código dentro de um bloco ```html.";
 
-const SYS_TEST = "Você é o testador final. Leia o pedido original do usuário, a lista de funções planejadas, e o arquivo HTML final. Confira linha por linha se o arquivo realmente atende ao pedido e se não tem nenhum erro de JavaScript (parênteses, chaves, ponto e vírgula, variáveis não definidas, funções chamadas com nome errado). Se achar QUALQUER erro, mesmo pequeno, responda começando com 'ERRO ENCONTRADO:' seguido da explicação exata. Se estiver tudo certo, responda só 'STATUS: APROVADO'.";
+const SYS_TEST = "Você é o testador final. Leia o pedido original do usuário, a lista final de funções planejadas, e o arquivo HTML final. Confira linha por linha se o arquivo realmente atende ao pedido e se não tem nenhum erro de JavaScript (parênteses, chaves, ponto e vírgula, variáveis não definidas, funções chamadas com nome errado). Se achar QUALQUER erro, mesmo pequeno, responda começando com 'ERRO ENCONTRADO:' seguido da explicação exata. Se estiver tudo certo, responda só 'STATUS: APROVADO'.";
 
-const SYS_DELIVER = "Você é quem entrega o projeto pro usuário final. Com base em tudo que foi construído (pedido original, funções planejadas, auditoria minuciosa e teste funcional), escreva uma resposta curta e direta em português explicando o que foi entregue, como usar, e se algo foi corrigido durante o processo. Não repita o código, só explique.";
+const SYS_DELIVER = "Você é quem entrega o projeto pro usuário final. Com base em tudo que foi construído (pedido original, lista final de funções, quantas foram corrigidas durante a verificação contínua, auditoria minuciosa e teste funcional), escreva uma resposta curta e direta em português explicando o que foi entregue, quantas funções o arquivo tem, como usar, e se algo foi corrigido durante o processo. Não repita o código, só explique.";
 
 // ---------- execução do pipeline ----------
 
@@ -506,11 +627,11 @@ async function runPipeline(){
   const n = apiKeys.length;
   const solo = n === 1;
 
-  async function stage(num, label, system, userMsg){
+  // chamada "de linha" (usada pelas 8 etapas fixas, atualiza a etapa numerada inteira)
+  async function stage(num, label, system, userMsg, maxTokens){
     setStage(num, `<span class="spinner"></span> ${label}`, 'active');
     try{
-      const { result: out, key } = await callWithRetry(
-        model, system, userMsg,
+      const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 8192,
         (attempt, max, waitSec) => setStage(num,
           `<span class="spinner"></span> servidor ocupado, tentando de novo (${attempt}/${max}) em ${waitSec}s`,
           'active'),
@@ -528,82 +649,142 @@ async function runPipeline(){
     }
   }
 
+  // chamada "de linha de função" (usada dentro da etapa 4, atualiza uma linha da lista dinâmica)
+  async function funcCall(rowIndex, system, userMsg, maxTokens, statusPrefix){
+    const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 4096,
+      (attempt, max, waitSec) => setFuncRowStatus(rowIndex, 'active',
+        `servidor ocupado, tentativa ${attempt}/${max} em ${waitSec}s`),
+      6
+    );
+    markFuncRowKey(rowIndex, key);
+    if(solo) await sleep(1600);
+    return out;
+  }
+
   try{
-    // Etapas 1-2: duas listas independentes de funções
+    // Etapas 1-2: duas listas independentes de funções, com estimativa de linhas
     const planTasks = [
-      () => stage(1, 'gerando lista A', SYS_PLAN_A, userPrompt),
-      () => stage(2, 'gerando lista B', SYS_PLAN_B, userPrompt)
+      () => stage(1, 'gerando lista A', SYS_PLAN_A, userPrompt, 4096),
+      () => stage(2, 'gerando lista B', SYS_PLAN_B, userPrompt, 4096)
     ];
     const [listA, listB] = n >= 2
       ? await Promise.all(planTasks.map(t => t()))
       : await sequentially(planTasks);
 
-    const mergedList = `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA A:\n${listA}\n\nLISTA B:\n${listB}`;
+    // Etapa 3: reconciliação — as duas IAs "se juntam" numa lista final única, sem limite de tamanho
+    const reconcileRaw = await stage(3, 'reconciliando lista final', SYS_RECONCILE,
+      `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA A:\n${listA}\n\nLISTA B:\n${listB}`, 4096);
+    const functionList = parseFunctionList(reconcileRaw);
+    if(functionList.length === 0){
+      throw new Error("Não consegui extrair uma lista de funções válida da reconciliação. Tenta rodar de novo.");
+    }
+    showOut(3, reconcileRaw + `\n\n→ lista final com ${functionList.length} função(ões).`);
 
-    // Etapas 3-5: implementação das 3 funções
-    const implTasks = [1,2,3].map(i => () => stage(
-      2 + i,
-      `codando função ${i}`,
-      SYS_IMPL(i),
-      `${mergedList}\n\nImplemente apenas a função ${i} da lista.`
-    ));
-    const rawParts = n >= 3
-      ? await Promise.all(implTasks.map(t => t()))
-      : await sequentially(implTasks);
-    const codeParts = rawParts.map(extractCode);
-    const allCode = codeParts.join('\n\n');
-    [3,4,5].forEach((num,idx) => showOut(num, codeParts[idx]));
+    const mergedList = `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA FINAL (JSON): ${JSON.stringify(functionList)}`;
 
-    // Etapas 6-7: verificação
-    const reviewTasks = [
-      () => stage(6, 'verificando', SYS_REVIEW_1, `${mergedList}\n\nCÓDIGO DAS 3 FUNÇÕES:\n${allCode}`),
-      () => stage(7, 'segunda verificação', SYS_REVIEW_2, `${mergedList}\n\nCÓDIGO DAS 3 FUNÇÕES:\n${allCode}`)
-    ];
-    const [verdictA, verdictB] = n >= 2
-      ? await Promise.all(reviewTasks.map(t => t()))
-      : await sequentially(reviewTasks);
+    // Etapa 4: implementação dinâmica — rascunha tudo (em paralelo, se der),
+    // depois aceita uma função de cada vez, sempre testando com tudo que já
+    // foi aceito antes de seguir pra próxima
+    setStage(4, `<span class="spinner"></span> rascunhando ${functionList.length} função(ões)`, 'active');
+    renderFuncList(functionList);
 
-    // Etapa 8: junta tudo num arquivo HTML completo
-    const mergedRaw = await stage(8, 'integrando', SYS_INTEGRATE,
-      `PEDIDO ORIGINAL: ${userPrompt}\n\nCÓDIGO DAS FUNÇÕES:\n${allCode}\n\nOBSERVAÇÕES DA REVISÃO 1:\n${verdictA}\n\nOBSERVAÇÕES DA REVISÃO 2:\n${verdictB}`);
-    let finalFile = extractCode(mergedRaw);
-    showOut(8, finalFile);
+    const draftTasks = functionList.map((fn, i) => async () => {
+      setFuncRowStatus(i, 'active', 'rascunhando');
+      const raw = await funcCall(i, SYS_DRAFT(fn),
+        `${mergedList}\n\nImplemente apenas a função "${fn.name}" com aproximadamente ${fn.lines} linhas.`,
+        Math.max(2048, Math.min(8192, fn.lines * 45)));
+      const code = extractCode(raw);
+      setFuncRowStatus(i, 'drafted', 'rascunho pronto, na fila da verificação');
+      return code;
+    });
 
-    // Etapa 9: auditoria letra por letra — antes de qualquer resposta ser gerada
-    let meticulous = await stage(9, 'revisando letra por letra', SYS_METICULOUS,
-      `ARQUIVO PARA AUDITORIA:\n${finalFile}`);
+    const drafts = n >= 2
+      ? await inBatches(draftTasks, n)
+      : await sequentially(draftTasks);
 
-    if(meticulous.trim().toUpperCase().startsWith('ERRO')){
-      setStage(9, 'problema encontrado — corrigindo', 'error');
-      const fixedRaw = await stage(9, 'corrigindo', SYS_FIX,
-        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM PROBLEMAS:\n${finalFile}\n\nPROBLEMAS ENCONTRADOS NA AUDITORIA:\n${meticulous}`);
-      finalFile = extractCode(fixedRaw);
-      showOut(9, meticulous + "\n\n— CORRIGIDO —\n\n" + finalFile);
-      setStage(9, 'corrigido', 'done');
-    } else {
-      setStage(9, 'aprovado', 'done');
+    setStage(4, `<span class="spinner"></span> verificando funções uma a uma`, 'active');
+
+    const acceptedCode = [];
+    for(let i = 0; i < functionList.length; i++){
+      const fn = functionList[i];
+      let candidateCode = drafts[i];
+      let attempt = 0;
+      let ok = false;
+      let lastCheck = '';
+
+      while(attempt < 3 && !ok){
+        attempt++;
+        setFuncRowStatus(i, 'active', `verificando com as ${acceptedCode.length} função(ões) já aceitas`);
+        const combined = [...acceptedCode, candidateCode].join('\n\n');
+        lastCheck = await funcCall(i, SYS_CUMULATIVE_CHECK,
+          `${mergedList}\n\nCÓDIGO ACUMULADO (funções já aceitas + a função recém adicionada):\n${combined}\n\nFUNÇÃO RECÉM ADICIONADA: ${fn.name}`,
+          2048);
+
+        if(lastCheck.trim().toUpperCase().startsWith('ERRO')){
+          setFuncRowStatus(i, 'active', `problema encontrado, corrigindo (tentativa ${attempt}/3)`);
+          const fixedRaw = await funcCall(i, SYS_FIX_FUNCTION(fn),
+            `FUNÇÃO COM PROBLEMA:\n${candidateCode}\n\nRESTANTE DO CÓDIGO JÁ ACEITO (contexto, não repita):\n${acceptedCode.join('\n\n')}\n\nPROBLEMA APONTADO PELA VERIFICAÇÃO:\n${lastCheck}`,
+            4096);
+          candidateCode = extractCode(fixedRaw);
+        } else {
+          ok = true;
+        }
+      }
+
+      acceptedCode.push(candidateCode);
+      if(ok && attempt === 1){
+        setFuncRowStatus(i, 'done', 'aceita de primeira');
+      } else if(ok){
+        setFuncRowStatus(i, 'done', `corrigida e aceita (${attempt} tentativas)`);
+      } else {
+        setFuncRowStatus(i, 'error', 'não resolveu em 3 tentativas — seguiu assim mesmo, a auditoria final ainda vai pegar isso');
+      }
     }
 
-    // Etapa 10: teste funcional final contra o pedido original
-    let testResult = await stage(10, 'testando', SYS_TEST,
-      `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTAS DE PLANEJAMENTO:\n${mergedList}\n\nARQUIVO FINAL:\n${finalFile}`);
+    setStage(4, `${functionList.length}/${functionList.length} funções aceitas`, 'done');
+    const allCode = acceptedCode.join('\n\n');
+
+    // Etapa 5: junta tudo num arquivo HTML completo
+    const mergedRaw = await stage(5, 'integrando', SYS_INTEGRATE,
+      `${mergedList}\n\nCÓDIGO DE TODAS AS FUNÇÕES (já verificadas em conjunto):\n${allCode}`, 32768);
+    let finalFile = extractCode(mergedRaw);
+    showOut(5, finalFile);
+
+    // Etapa 6: auditoria letra por letra — antes de qualquer resposta ser gerada
+    let meticulous = await stage(6, 'revisando letra por letra', SYS_METICULOUS,
+      `ARQUIVO PARA AUDITORIA:\n${finalFile}`, 4096);
+
+    if(meticulous.trim().toUpperCase().startsWith('ERRO')){
+      setStage(6, 'problema encontrado — corrigindo', 'error');
+      const fixedRaw = await stage(6, 'corrigindo', SYS_FIX_FILE,
+        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM PROBLEMAS:\n${finalFile}\n\nPROBLEMAS ENCONTRADOS NA AUDITORIA:\n${meticulous}`, 32768);
+      finalFile = extractCode(fixedRaw);
+      showOut(6, meticulous + "\n\n— CORRIGIDO —\n\n" + finalFile);
+      setStage(6, 'corrigido', 'done');
+    } else {
+      setStage(6, 'aprovado', 'done');
+    }
+
+    // Etapa 7: teste funcional final contra o pedido original
+    let testResult = await stage(7, 'testando', SYS_TEST,
+      `${mergedList}\n\nARQUIVO FINAL:\n${finalFile}`, 4096);
 
     if(testResult.trim().toUpperCase().startsWith('ERRO')){
-      setStage(10, 'erro encontrado — corrigindo', 'error');
-      const fixedRaw2 = await stage(10, 'corrigindo', SYS_FIX,
-        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM ERRO:\n${finalFile}\n\nERRO REPORTADO PELO TESTE:\n${testResult}`);
+      setStage(7, 'erro encontrado — corrigindo', 'error');
+      const fixedRaw2 = await stage(7, 'corrigindo', SYS_FIX_FILE,
+        `PEDIDO ORIGINAL: ${userPrompt}\n\nARQUIVO COM ERRO:\n${finalFile}\n\nERRO REPORTADO PELO TESTE:\n${testResult}`, 32768);
       finalFile = extractCode(fixedRaw2);
-      showOut(10, testResult + "\n\n— CORRIGIDO —\n\n" + finalFile);
-      setStage(10, 'corrigido', 'done');
+      showOut(7, testResult + "\n\n— CORRIGIDO —\n\n" + finalFile);
+      setStage(7, 'corrigido', 'done');
     } else {
-      setStage(10, 'aprovado', 'done');
+      setStage(7, 'aprovado', 'done');
     }
 
     runState.finalCode = finalFile;
 
-    // Etapa 11: resposta final
-    const finalMsg = await stage(11, 'escrevendo resposta', SYS_DELIVER,
-      `PEDIDO ORIGINAL: ${userPrompt}\n\nLISTA DE FUNÇÕES:\n${mergedList}\n\nRESULTADO DA AUDITORIA MINUCIOSA:\n${meticulous}\n\nRESULTADO DO TESTE FINAL:\n${testResult}`);
+    // Etapa 8: resposta final
+    const finalMsg = await stage(8, 'escrevendo resposta', SYS_DELIVER,
+      `${mergedList}\n\nRESULTADO DA AUDITORIA MINUCIOSA:\n${meticulous}\n\nRESULTADO DO TESTE FINAL:\n${testResult}`, 2048);
 
     document.getElementById('finalText').textContent = finalMsg;
     document.getElementById('finalBox').classList.add('show');
