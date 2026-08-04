@@ -1,951 +1,794 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RELÊ — Gemini em Cadeia</title>
+<title>Sala de Controle — Orquestrador Multi-Gemini</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#10141a;
-  --panel:#181d25;
-  --panel-2:#1f2530;
-  --line:#2b323d;
-  --text:#e7eaee;
-  --text-dim:#8d97a5;
-  --amber:#e3a542;
-  --amber-dim:#4a3a20;
-  --teal:#4fae8e;
-  --teal-dim:#1e332c;
-  --rust:#d2694f;
-  --rust-dim:#3a2420;
-  --radius:10px;
-  --mono:'JetBrains Mono',monospace;
-  --sans:'Space Grotesk',sans-serif;
-}
-*{box-sizing:border-box;}
-html,body{margin:0;padding:0;height:100%;}
-body{
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--sans);
-  display:flex;
-  height:100vh;
-  overflow:hidden;
-}
-@media (prefers-reduced-motion: reduce){
-  *{animation-duration:0.01ms !important; transition-duration:0.01ms !important;}
-}
-
-/* ===== RAIL (linha de montagem) ===== */
-#rail{
-  width:220px;
-  min-width:220px;
-  background:var(--panel);
-  border-right:1px solid var(--line);
-  padding:22px 16px;
-  display:flex;
-  flex-direction:column;
-  gap:0;
-}
-#rail .brand{
-  font-family:var(--mono);
-  font-size:13px;
-  letter-spacing:0.14em;
-  color:var(--amber);
-  font-weight:700;
-  margin-bottom:4px;
-}
-#rail .brand-sub{
-  font-family:var(--mono);
-  font-size:10.5px;
-  color:var(--text-dim);
-  letter-spacing:0.05em;
-  margin-bottom:28px;
-}
-.station{
-  position:relative;
-  display:flex;
-  align-items:flex-start;
-  gap:12px;
-  padding-bottom:28px;
-}
-.station:last-child{padding-bottom:0;}
-.station .track{
-  position:absolute;
-  left:11px;
-  top:24px;
-  bottom:-4px;
-  width:2px;
-  background:var(--line);
-}
-.station:last-child .track{display:none;}
-.station.done .track{background:var(--teal-dim);}
-.node{
-  width:24px;
-  height:24px;
-  min-width:24px;
-  border-radius:50%;
-  border:2px solid var(--line);
-  background:var(--panel-2);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-family:var(--mono);
-  font-size:10px;
-  font-weight:700;
-  color:var(--text-dim);
-  z-index:1;
-  transition:all .25s ease;
-}
-.station.active .node{
-  border-color:var(--amber);
-  color:var(--amber);
-  box-shadow:0 0 0 4px var(--amber-dim);
-  animation:pulse 1.4s ease-in-out infinite;
-}
-.station.done .node{
-  border-color:var(--teal);
-  background:var(--teal);
-  color:var(--panel);
-}
-.station.error .node{
-  border-color:var(--rust);
-  color:var(--rust);
-  box-shadow:0 0 0 4px var(--rust-dim);
-}
-@keyframes pulse{
-  0%,100%{box-shadow:0 0 0 4px var(--amber-dim);}
-  50%{box-shadow:0 0 0 7px var(--amber-dim);}
-}
-.station .label{
-  padding-top:2px;
-}
-.station .label .name{
-  font-size:13.5px;
-  font-weight:600;
-  color:var(--text);
-  line-height:1.3;
-}
-.station .label .desc{
-  font-family:var(--mono);
-  font-size:10px;
-  color:var(--text-dim);
-  margin-top:2px;
-  line-height:1.4;
-}
-#rail-footer{
-  margin-top:auto;
-  padding-top:18px;
-  border-top:1px solid var(--line);
-  font-family:var(--mono);
-  font-size:10.5px;
-  color:var(--text-dim);
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
-#key-indicator{color:var(--text-dim);}
-#key-indicator b{color:var(--amber);}
-#settings-btn{
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  color:var(--text-dim);
-  font-family:var(--mono);
-  font-size:11px;
-  padding:8px 10px;
-  border-radius:6px;
-  cursor:pointer;
-  text-align:left;
-  transition:.15s;
-}
-#settings-btn:hover{border-color:var(--amber);color:var(--amber);}
-
-/* ===== MAIN ===== */
-#main{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  min-width:0;
-}
-#topbar{
-  padding:16px 28px;
-  border-bottom:1px solid var(--line);
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-}
-#topbar h1{
-  font-size:15px;
-  margin:0;
-  font-weight:600;
-  color:var(--text);
-}
-#topbar .status-line{
-  font-family:var(--mono);
-  font-size:10.5px;
-  color:var(--text-dim);
-  margin-top:2px;
-}
-#chat{
-  flex:1;
-  overflow-y:auto;
-  padding:28px;
-  display:flex;
-  flex-direction:column;
-  gap:22px;
-}
-.msg{max-width:760px;}
-.msg.user{align-self:flex-end;}
-.msg.assistant{align-self:flex-start; width:100%;}
-.bubble{
-  padding:13px 16px;
-  border-radius:var(--radius);
-  line-height:1.55;
-  font-size:14.5px;
-}
-.msg.user .bubble{
-  background:var(--amber-dim);
-  border:1px solid #5a4526;
-  color:var(--text);
-}
-.msg.assistant .bubble{
-  background:var(--panel);
-  border:1px solid var(--line);
-}
-.bubble p{margin:0 0 10px 0;}
-.bubble p:last-child{margin-bottom:0;}
-.bubble code{
-  font-family:var(--mono);
-  background:var(--panel-2);
-  padding:1px 5px;
-  border-radius:4px;
-  font-size:0.9em;
-}
-.bubble pre{
-  background:#0c0f14;
-  border:1px solid var(--line);
-  border-radius:8px;
-  padding:12px 14px;
-  overflow-x:auto;
-  margin:10px 0;
-}
-.bubble pre code{background:none;padding:0;}
-.empty-state{
-  margin:auto;
-  text-align:center;
-  color:var(--text-dim);
-  max-width:420px;
-}
-.empty-state .glyph{font-size:34px;margin-bottom:12px;}
-.empty-state h2{font-size:16px;color:var(--text);font-weight:600;margin:0 0 8px;}
-.empty-state p{font-size:13px;line-height:1.6;margin:0;}
-
-.process-log{
-  margin-top:10px;
-  border-top:1px dashed var(--line);
-  padding-top:8px;
-}
-.process-log summary{
-  cursor:pointer;
-  font-family:var(--mono);
-  font-size:11px;
-  color:var(--text-dim);
-  letter-spacing:.03em;
-}
-.process-log summary:hover{color:var(--amber);}
-.process-stage{
-  margin-top:10px;
-  padding:10px 12px;
-  background:var(--panel-2);
-  border-radius:7px;
-  border-left:2px solid var(--line);
-}
-.process-stage .stage-name{
-  font-family:var(--mono);
-  font-size:10px;
-  color:var(--amber);
-  text-transform:uppercase;
-  letter-spacing:.06em;
-  margin-bottom:5px;
-}
-.process-stage .stage-text{
-  font-size:12.5px;
-  color:var(--text-dim);
-  white-space:pre-wrap;
-  line-height:1.5;
-}
-
-.files-row{
-  margin-top:12px;
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
-}
-.file-chip{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  border-radius:7px;
-  padding:7px 11px;
-  font-family:var(--mono);
-  font-size:11.5px;
-  color:var(--text);
-  cursor:pointer;
-  transition:.15s;
-}
-.file-chip:hover{border-color:var(--teal);color:var(--teal);}
-.file-chip .dl-icon{color:var(--teal);}
-
-.error-note{
-  color:var(--rust);
-  font-family:var(--mono);
-  font-size:12px;
-  background:var(--rust-dim);
-  border:1px solid #5a3a30;
-  padding:10px 12px;
-  border-radius:7px;
-}
-
-#composer{
-  padding:18px 28px 24px;
-  border-top:1px solid var(--line);
-  display:flex;
-  gap:10px;
-  align-items:flex-end;
-}
-#composer textarea{
-  flex:1;
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  color:var(--text);
-  font-family:var(--sans);
-  font-size:14px;
-  padding:12px 14px;
-  resize:none;
-  min-height:46px;
-  max-height:160px;
-  line-height:1.4;
-}
-#composer textarea:focus{outline:2px solid var(--amber); outline-offset:1px;}
-#composer button{
-  background:var(--amber);
-  border:none;
-  color:#1a1305;
-  font-family:var(--mono);
-  font-weight:700;
-  font-size:12.5px;
-  letter-spacing:.03em;
-  padding:0 20px;
-  height:46px;
-  border-radius:var(--radius);
-  cursor:pointer;
-  transition:.15s;
-}
-#composer button:hover:not(:disabled){filter:brightness(1.1);}
-#composer button:disabled{opacity:.4;cursor:not-allowed;}
-
-/* ===== MODAL ===== */
-#overlay{
-  position:fixed; inset:0;
-  background:rgba(8,10,13,.72);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:50;
-}
-#overlay.open{display:flex;}
-body.modal-open #main{pointer-events:none; filter:blur(1px) brightness(.85);}
-#key-help.visible{display:block !important;}
-#keys-input.invalid{border-color:var(--rust);}
-.error-note .fix-link{
-  display:inline-block;
-  margin-top:8px;
-  color:var(--amber);
-  cursor:pointer;
-  text-decoration:underline;
-  font-weight:600;
-}
-#modal{
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:12px;
-  width:480px;
-  max-width:92vw;
-  max-height:88vh;
-  overflow-y:auto;
-  padding:26px;
-}
-#modal h2{
-  font-size:15px;
-  margin:0 0 4px;
-  font-weight:600;
-}
-#modal .hint{
-  font-size:12px;
-  color:var(--text-dim);
-  margin:0 0 18px;
-  line-height:1.5;
-}
-#modal label{
-  display:block;
-  font-family:var(--mono);
-  font-size:10.5px;
-  color:var(--text-dim);
-  letter-spacing:.05em;
-  text-transform:uppercase;
-  margin-bottom:6px;
-}
-#modal textarea, #modal select{
-  width:100%;
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  border-radius:7px;
-  color:var(--text);
-  font-family:var(--mono);
-  font-size:12.5px;
-  padding:10px 12px;
-  margin-bottom:16px;
-}
-#modal textarea{min-height:90px; resize:vertical;}
-#keys-input.masked{-webkit-text-security:disc; -moz-text-security:disc; text-security:disc;}
-#modal .row-actions{
-  display:flex;
-  justify-content:flex-end;
-  gap:10px;
-  margin-top:6px;
-}
-#modal button{
-  font-family:var(--mono);
-  font-size:12px;
-  font-weight:600;
-  padding:10px 18px;
-  border-radius:7px;
-  cursor:pointer;
-  border:1px solid var(--line);
-}
-#modal .btn-cancel{background:transparent; color:var(--text-dim);}
-#modal .btn-save{background:var(--amber); color:#1a1305; border-color:var(--amber);}
-#modal .btn-save:hover{filter:brightness(1.08);}
-
-/* scrollbar */
-::-webkit-scrollbar{width:9px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--line); border-radius:5px;}
-
-@media (max-width:720px){
-  #rail{
-    width:100%; min-width:0; height:auto;
-    flex-direction:row; overflow-x:auto;
-    padding:14px 16px; align-items:center; gap:18px;
+  :root{
+    --bg:#0a0c10;
+    --bg-grid:#0d1017;
+    --panel:#12151c;
+    --panel-2:#161a23;
+    --border:#232838;
+    --text:#e7eaf2;
+    --text-dim:#8a92a6;
+    --text-faint:#565e72;
+    --cyan:#4fd1c5;
+    --amber:#f2b84b;
+    --magenta:#e8618c;
+    --green:#7ed957;
+    --blue:#5b8def;
+    --violet:#c792ea;
+    --red:#ef5b5b;
+    --mono:'JetBrains Mono', ui-monospace, monospace;
+    --sans:'Space Grotesk', system-ui, sans-serif;
+    --radius:12px;
   }
-  body{flex-direction:column; height:100dvh;}
-  #rail .brand,#rail .brand-sub{display:none;}
-  .station{padding-bottom:0; flex-direction:column; align-items:center; gap:4px; min-width:64px;}
-  .station .track{display:none;}
-  .station .label .desc{display:none;}
-  .station .label .name{font-size:9.5px; text-align:center;}
-  #rail-footer{display:none;}
-  #chat,#composer{padding-left:16px; padding-right:16px;}
-}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 500px at 10% -10%, #142033 0%, transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, #1c1430 0%, transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    min-height:100vh;
+    background-attachment:fixed;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size:36px 36px;
+    pointer-events:none;
+    z-index:0;
+  }
+  .app{position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:32px 20px 80px;}
+
+  header.top{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:28px; flex-wrap:wrap;}
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand .dot{width:10px;height:10px;border-radius:50%; background:var(--cyan); box-shadow:0 0 14px var(--cyan); animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .brand h1{font-size:20px; margin:0; letter-spacing:.2px; font-weight:600;}
+  .brand .tag{font-family:var(--mono); font-size:11px; color:var(--text-faint); letter-spacing:1.5px; text-transform:uppercase;}
+  header.top p.sub{margin:0; color:var(--text-dim); font-size:13px; max-width:420px;}
+
+  .panel{
+    background:linear-gradient(180deg, var(--panel), var(--panel-2));
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+    margin-bottom:18px;
+    box-shadow:0 1px 0 rgba(255,255,255,0.02) inset, 0 20px 40px -30px rgba(0,0,0,0.6);
+  }
+  .panel h2{
+    font-size:12px; text-transform:uppercase; letter-spacing:1.6px; font-weight:600;
+    color:var(--text-dim); margin:0 0 14px 0; display:flex; align-items:center; gap:8px;
+  }
+  .panel h2 .n{font-family:var(--mono); color:var(--text-faint); font-size:11px;}
+
+  /* ---- keys panel ---- */
+  #keysList{display:flex; flex-direction:column; gap:8px; margin-bottom:12px;}
+  .key-row{
+    display:grid; grid-template-columns:14px 1fr 1fr auto; gap:10px; align-items:center;
+    background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+  }
+  .key-swatch{width:10px;height:10px;border-radius:50%;}
+  .key-row input{
+    background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:12.5px;
+    outline:none; width:100%;
+  }
+  .key-row input::placeholder{color:var(--text-faint);}
+  .key-row button{
+    background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px;
+  }
+  .key-row button:hover{color:var(--red);}
+  .key-status{font-family:var(--mono); font-size:10px; padding:2px 6px; border-radius:4px; white-space:nowrap;}
+  .key-status.ok{color:var(--green); background:rgba(126,217,87,.1);}
+  .key-status.bad{color:var(--red); background:rgba(239,91,91,.1);}
+  .key-status.idle{color:var(--text-faint); background:rgba(255,255,255,.04);}
+
+  .btn-add{
+    background:transparent; border:1px dashed var(--border); color:var(--text-dim);
+    font-family:var(--mono); font-size:12px; padding:8px 12px; border-radius:8px; cursor:pointer; width:100%;
+  }
+  .btn-add:hover{border-color:var(--cyan); color:var(--cyan);}
+  .keys-note{font-size:11.5px; color:var(--text-faint); margin-top:10px; line-height:1.5;}
+
+  /* ---- brief panel ---- */
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:11.5px; color:var(--text-dim); margin-bottom:6px; font-family:var(--mono); letter-spacing:.3px;}
+  .field textarea, .field input[type=text], .field input[type=number], .field select{
+    width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); padding:10px 12px; font-family:var(--sans); font-size:13.5px; outline:none;
+    transition:border-color .15s;
+  }
+  .field textarea{min-height:90px; resize:vertical; font-family:var(--mono); font-size:12.5px; line-height:1.5;}
+  .field textarea:focus, .field input:focus, .field select:focus{border-color:var(--cyan);}
+  .row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+  @media (max-width:720px){.row{grid-template-columns:1fr;}}
+
+  /* ---- controls ---- */
+  .controls{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .btn{
+    font-family:var(--mono); font-size:12.5px; letter-spacing:.4px; padding:11px 20px; border-radius:8px;
+    border:1px solid transparent; cursor:pointer; text-transform:uppercase; font-weight:600;
+  }
+  .btn-primary{background:var(--cyan); color:#03211f;}
+  .btn-primary:hover{filter:brightness(1.08);}
+  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
+  .btn-stop{background:transparent; border-color:var(--red); color:var(--red);}
+  .btn-stop:hover{background:rgba(239,91,91,.08);}
+  .btn-ghost{background:transparent; border-color:var(--border); color:var(--text-dim);}
+  .btn-ghost:hover{border-color:var(--text-dim); color:var(--text);}
+
+  .progress-wrap{flex:1; min-width:180px;}
+  .progress-bar{height:6px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden;}
+  .progress-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--cyan), var(--blue)); transition:width .3s;}
+  .progress-label{font-family:var(--mono); font-size:11px; color:var(--text-faint); margin-top:6px;}
+
+  /* ---- log ---- */
+  #log{
+    height:260px; overflow-y:auto; font-family:var(--mono); font-size:12px; line-height:1.7;
+    background:#080a0e; border:1px solid var(--border); border-radius:8px; padding:12px 14px;
+  }
+  .log-line{display:flex; gap:8px; margin-bottom:2px;}
+  .log-time{color:var(--text-faint); flex-shrink:0;}
+  .log-badge{flex-shrink:0; padding:0 6px; border-radius:4px; font-size:10.5px; font-weight:600;}
+  .log-msg{color:var(--text-dim);}
+  .log-msg.ok{color:var(--green);}
+  .log-msg.err{color:var(--red);}
+  .log-msg.hl{color:var(--text);}
+
+  /* ---- output ---- */
+  .output-tabs{display:flex; gap:6px; margin-bottom:12px;}
+  .tab-btn{
+    background:transparent; border:1px solid var(--border); color:var(--text-faint);
+    font-family:var(--mono); font-size:11px; padding:6px 12px; border-radius:6px; cursor:pointer;
+  }
+  .tab-btn.active{border-color:var(--cyan); color:var(--cyan);}
+  #codeView{
+    max-height:420px; overflow:auto; background:#080a0e; border:1px solid var(--border); border-radius:8px;
+    padding:14px; font-family:var(--mono); font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word;
+    color:#c9d1e0;
+  }
+  #previewFrame{width:100%; height:420px; border:1px solid var(--border); border-radius:8px; background:#fff;}
+  .output-actions{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;}
+  .output-meta{font-family:var(--mono); font-size:11px; color:var(--text-faint);}
+  .hidden{display:none !important;}
+
+  .section-chip{
+    display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px;
+    padding:3px 8px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); margin:3px 4px 0 0;
+  }
+  .section-chip .sw{width:6px;height:6px;border-radius:50%;}
+  .section-chip.done{border-color:rgba(126,217,87,.4); color:var(--green);}
+  .section-chip.err{border-color:rgba(239,91,91,.4); color:var(--red);}
 </style>
 </head>
 <body>
+<div class="app">
 
-<aside id="rail">
-  <div>
-    <div class="brand">RELÊ</div>
-    <div class="brand-sub">GEMINI EM CADEIA</div>
-  </div>
-  <div id="stations"></div>
-  <div id="rail-footer">
-    <div id="key-indicator">nenhuma chave configurada</div>
-    <button id="settings-btn" type="button">⚙ configurar chaves</button>
-  </div>
-</aside>
-
-<main id="main">
-  <div id="topbar">
-    <div>
-      <h1>Pipeline de resposta</h1>
-      <div class="status-line" id="status-line">parado</div>
+  <header class="top">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>
+        <h1>Sala de Controle</h1>
+        <div class="tag">orquestrador multi-agente · gemini api</div>
+      </div>
     </div>
-  </div>
+    <p class="sub">Várias chaves da API Gemini trabalhando juntas: uma planeja, várias escrevem o arquivo em seções, uma ou mais revisam e corrigem, e no final tudo é unido em um único arquivo pronto para baixar.</p>
+  </header>
 
-  <div id="chat">
-    <div class="empty-state" id="empty-state">
-      <div class="glyph">⛓</div>
-      <h2>Cada resposta passa por 5 estações</h2>
-      <p>Planejar → Rascunhar → Criticar → Refinar → Entregar. Várias chamadas ao Gemini trabalham em cadeia — se uma chave travar por limite, a próxima assume. Configure suas chaves para começar.</p>
+  <section class="panel">
+    <h2>01 · Chaves de API <span class="n">— adicione uma ou mais</span></h2>
+    <div id="keysList"></div>
+    <button class="btn-add" id="addKeyBtn">+ adicionar chave</button>
+    <div class="keys-note">
+      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). O arquivo cresce seção por seção — por isso não há limite real de linhas (funciona para 9000+ linhas ou no modo infinito), e a verificação final é feita em lotes pequenos para não gastar tudo de uma vez. Trate suas chaves como senhas.
     </div>
-  </div>
+  </section>
 
-  <form id="composer">
-    <textarea id="input" placeholder="Escreva sua mensagem..." rows="1"></textarea>
-    <button id="send-btn" type="submit">ENVIAR</button>
-  </form>
-</main>
-
-<div id="overlay">
-  <div id="modal">
-    <h2>Configurar chaves Gemini</h2>
-    <p class="hint">Cole uma ou mais chaves (uma por linha ou separadas por vírgula). Elas ficam salvas só no seu navegador (localStorage) e são enviadas apenas para a API do Google. Se uma chave bater o limite de uso, o RELÊ roda automaticamente para a próxima.</p>
-    <label for="keys-input">Chaves da API <span id="toggle-mask" style="float:right;cursor:pointer;color:var(--amber);text-transform:none;letter-spacing:0;">👁 mostrar</span></label>
-    <textarea id="keys-input" class="masked" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."></textarea>
-    <p class="hint" id="key-help" style="display:none;">Se der erro 401/403: confira se copiou a chave inteira (sem espaços/aspas), se ela é do <strong>Google AI Studio</strong> (aistudio.google.com/apikey) e se não tem restrição de "HTTP referrer" — chaves restritas bloqueiam chamadas feitas de um arquivo local.</p>
-    <label for="model-select">Modelo</label>
-    <select id="model-select">
-      <option value="gemini-3.6-flash">gemini-3.6-flash (rápido, recomendado)</option>
-      <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (mais barato/rápido)</option>
-      <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-      <option value="gemini-2.5-pro">gemini-2.5-pro (mais lento, mais profundo)</option>
-    </select>
-    <div class="row-actions">
-      <button type="button" class="btn-cancel" id="cancel-settings">cancelar</button>
-      <button type="button" class="btn-save" id="save-settings">salvar</button>
+  <section class="panel">
+    <h2>02 · O que construir</h2>
+    <div class="field">
+      <label>Descreva o arquivo / app que a IA deve criar</label>
+      <textarea id="briefInput" placeholder="Ex: um jogo da velha completo em HTML/JS com IA para jogar sozinho, painel de placar e animações..."></textarea>
     </div>
-  </div>
+    <div class="row">
+      <div class="field">
+        <label>Tipo de arquivo</label>
+        <select id="fileTypeSelect">
+          <option value="html">html (site/app)</option>
+          <option value="js">js (javascript)</option>
+          <option value="py">py (python)</option>
+          <option value="java">java</option>
+          <option value="cpp">cpp / c</option>
+          <option value="css">css</option>
+          <option value="txt">outro / texto</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Meta de linhas (mín.)</label>
+        <input type="number" id="targetLines" value="9000" min="50" step="100">
+      </div>
+      <div class="field">
+        <label>Modelo Gemini</label>
+        <select id="modelSelect">
+          <option value="gemini-2.5-flash">gemini-2.5-flash (rápido)</option>
+          <option value="gemini-2.5-pro">gemini-2.5-pro (mais capaz)</option>
+          <option value="gemini-3.6-flash">gemini-3.6-flash</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label><input type="checkbox" id="infiniteMode" style="width:auto; margin-right:6px;">Modo infinito (ignora a meta e só para quando eu clicar em "parar")</label>
+      </div>
+      <div class="field">
+        <label>Paralelismo (seções ao mesmo tempo)</label>
+        <select id="concurrencySelect">
+          <option value="1">1 — sequencial (mais econômico)</option>
+          <option value="2" selected>2 por vez</option>
+          <option value="3">3 por vez</option>
+          <option value="4">4 por vez</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Tamanho do lote de verificação (linhas por chamada)</label>
+        <input type="number" id="verifyChunkLines" value="800" min="200" step="100">
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>03 · Execução</h2>
+    <div class="controls">
+      <button class="btn btn-primary" id="startBtn">▶ iniciar pipeline</button>
+      <button class="btn btn-stop hidden" id="stopBtn">■ parar</button>
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-label" id="progressLabel">aguardando início</div>
+      </div>
+    </div>
+    <div id="sectionsChips" style="margin-top:12px;"></div>
+  </section>
+
+  <section class="panel">
+    <h2>04 · Log dos agentes</h2>
+    <div id="log"></div>
+  </section>
+
+  <section class="panel hidden" id="outputPanel">
+    <h2>05 · Arquivo final <span class="n" id="outputMeta"></span></h2>
+    <div class="output-tabs">
+      <button class="tab-btn active" id="tabCode">código</button>
+      <button class="tab-btn" id="tabPreview">visualizar</button>
+    </div>
+    <div id="codeView"></div>
+    <iframe id="previewFrame" class="hidden"></iframe>
+    <div class="output-actions">
+      <input type="text" id="fileNameInput" placeholder="nome-do-arquivo.ext" style="font-family:var(--mono); font-size:12px; background:rgba(255,255,255,.03); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:6px; width:220px;">
+      <button class="btn btn-primary" id="downloadBtn">⬇ baixar arquivo</button>
+      <span class="output-meta" id="lineCountLabel"></span>
+    </div>
+  </section>
+
 </div>
 
 <script>
 (function(){
+  const AGENT_COLORS = ['#4fd1c5','#f2b84b','#e8618c','#7ed957','#5b8def','#c792ea'];
+  let keyIdSeq = 0;
+  const state = {
+    keys: [],        // {id, label, key, colorIdx, status}
+    running: false,
+    stopRequested: false,
+    keyCursor: 0,
+    sections: [],     // {name, description, code, status}
+    command: '',
+    fileNameSuggested: '',
+  };
 
-// ---------- estado ----------
-const STAGES = [
-  {id:'plan',   name:'Planejar', desc:'entende o pedido'},
-  {id:'draft',  name:'Rascunhar', desc:'escreve a base'},
-  {id:'critic', name:'Criticar', desc:'revisor exigente'},
-  {id:'refine', name:'Refinar', desc:'ajusta a resposta'},
-  {id:'ship',   name:'Entregar', desc:'monta o resultado'},
-];
+  // ---------- Keys UI ----------
+  const keysList = document.getElementById('keysList');
 
-let cfg = {keys:[], model:'gemini-3.6-flash'};
-let keyPointer = 0;
-let history = []; // {role:'user'|'model', text}
-let busy = false;
-
-const $ = sel => document.querySelector(sel);
-const stationsEl = $('#stations');
-const chatEl = $('#chat');
-const emptyState = $('#empty-state');
-const statusLine = $('#status-line');
-const keyIndicator = $('#key-indicator');
-
-// ---------- render das estações ----------
-function renderStations(){
-  stationsEl.innerHTML = '';
-  STAGES.forEach((s,i)=>{
-    const div = document.createElement('div');
-    div.className = 'station';
-    div.id = 'station-'+s.id;
-    div.innerHTML = `
-      <div class="track"></div>
-      <div class="node">${String(i+1).padStart(2,'0')}</div>
-      <div class="label">
-        <div class="name">${s.name}</div>
-        <div class="desc">${s.desc}</div>
-      </div>`;
-    stationsEl.appendChild(div);
-  });
-}
-renderStations();
-
-function setStation(id, status){
-  const el = document.getElementById('station-'+id);
-  if(!el) return;
-  el.classList.remove('active','done','error');
-  if(status) el.classList.add(status);
-}
-function resetStations(){
-  STAGES.forEach(s=>setStation(s.id,''));
-}
-
-// ---------- config / localStorage ----------
-function loadConfig(){
-  try{
-    const raw = localStorage.getItem('rele_cfg');
-    if(raw) cfg = JSON.parse(raw);
-  }catch(e){}
-  updateKeyIndicator();
-}
-function saveConfig(){
-  localStorage.setItem('rele_cfg', JSON.stringify(cfg));
-  updateKeyIndicator();
-}
-function updateKeyIndicator(){
-  if(!cfg.keys.length){
-    keyIndicator.innerHTML = 'nenhuma chave configurada';
-  }else{
-    keyIndicator.innerHTML = `chave <b>${(keyPointer % cfg.keys.length)+1}</b> de <b>${cfg.keys.length}</b> · ${cfg.model}`;
+  function addKeyRow(label='', key=''){
+    const id = 'k'+(keyIdSeq++);
+    const colorIdx = state.keys.length % AGENT_COLORS.length;
+    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle'});
+    renderKeys();
   }
-}
-loadConfig();
 
-// ---------- modal ----------
-const overlay = $('#overlay');
-function openSettings(showHelp){
-  $('#keys-input').value = cfg.keys.join('\n');
-  $('#model-select').value = cfg.model;
-  $('#keys-input').classList.add('masked');
-  $('#keys-input').classList.remove('invalid');
-  $('#toggle-mask').textContent = '👁 mostrar';
-  $('#key-help').classList.toggle('visible', !!showHelp);
-  overlay.classList.add('open');
-  document.body.classList.add('modal-open');
-  // garante que o texto colado/digitado vá para o campo certo, não para o chat atrás do modal
-  requestAnimationFrame(()=>{
-    const ta = $('#keys-input');
-    ta.focus();
-    ta.select();
-  });
-}
-function closeSettings(){
-  overlay.classList.remove('open');
-  document.body.classList.remove('modal-open');
-}
-$('#settings-btn').addEventListener('click', ()=> openSettings(false));
-$('#toggle-mask').addEventListener('click', ()=>{
-  const ta = $('#keys-input');
-  const masked = ta.classList.toggle('masked');
-  $('#toggle-mask').textContent = masked ? '👁 mostrar' : '🙈 ocultar';
-  ta.focus();
-});
-$('#keys-input').addEventListener('focus', ()=>{ $('#key-help').classList.add('visible'); });
-$('#cancel-settings').addEventListener('click', closeSettings);
-overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeSettings(); });
-document.addEventListener('keydown', (e)=>{
-  if(e.key==='Escape' && overlay.classList.contains('open')) closeSettings();
-});
-$('#save-settings').addEventListener('click', ()=>{
-  const raw = $('#keys-input').value;
-  const keys = [...new Set(
-    raw.split(/[\n,]/)
-       .map(k=>k.trim().replace(/^['"]|['"]$/g,'').trim())
-       .filter(Boolean)
-  )];
-  const looksInvalid = keys.some(k => k.length < 10 || /\s/.test(k));
-  if(looksInvalid){
-    $('#keys-input').classList.add('invalid');
-    $('#key-help').classList.add('visible');
-    return;
+  function renderKeys(){
+    keysList.innerHTML = '';
+    state.keys.forEach((k) => {
+      const row = document.createElement('div');
+      row.className = 'key-row';
+      row.innerHTML = `
+        <div class="key-swatch" style="background:${AGENT_COLORS[k.colorIdx]}"></div>
+        <input type="text" data-field="label" placeholder="rótulo (ex: Planejador)" value="${escapeAttr(k.label)}">
+        <input type="password" data-field="key" placeholder="cole sua chave da API Gemini" value="${escapeAttr(k.key)}">
+        <button title="remover">✕</button>
+      `;
+      row.querySelector('[data-field=label]').addEventListener('input', e => k.label = e.target.value);
+      row.querySelector('[data-field=key]').addEventListener('input', e => k.key = e.target.value.trim());
+      row.querySelector('button').addEventListener('click', () => {
+        state.keys = state.keys.filter(x => x.id !== k.id);
+        renderKeys();
+      });
+      keysList.appendChild(row);
+    });
   }
-  cfg.keys = keys;
-  cfg.model = $('#model-select').value;
-  keyPointer = 0;
-  saveConfig();
-  closeSettings();
-});
-if(!cfg.keys.length){
-  setTimeout(()=>{ openSettings(false); }, 300);
-}
 
-// ---------- chamada ao Gemini com rotação de chaves ----------
-function friendlyApiError(status, bodyText){
-  let apiMsg = '';
-  try{ apiMsg = JSON.parse(bodyText)?.error?.message || ''; }catch(e){ apiMsg = (bodyText||'').slice(0,160); }
-  switch(status){
-    case 400:
-      return `pedido inválido (400) — normalmente é o nome do modelo ou o formato da requisição. Detalhe: ${apiMsg || 'sem detalhe'}`;
-    case 401:
-      return 'chave rejeitada (401) — a chave está errada, incompleta, ou não é uma chave do Google AI Studio (aistudio.google.com/apikey). Confira em "configurar chaves".';
-    case 403:
-      return 'acesso negado (403) — a chave existe mas não tem permissão para este modelo, ou tem restrição de referrer/IP que bloqueia chamadas locais.';
-    case 404:
-      return `modelo não encontrado (404) — "${cfg.model}" pode não existir mais ou não estar disponível para essa chave. Tente trocar o modelo em "configurar chaves".`;
-    case 429:
-      return 'limite de uso atingido (429) — a chave estourou a cota por agora.';
-    default:
-      return `erro na API (status ${status})${apiMsg ? ': '+apiMsg : ''}`;
-  }
-}
+  function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
 
-async function geminiCall(contents, systemInstruction, maxOutputTokens){
-  if(!cfg.keys.length){
-    const e = new Error('Nenhuma chave configurada. Clique em "configurar chaves".');
-    e.isAuth = true;
-    throw e;
+  document.getElementById('addKeyBtn').addEventListener('click', () => addKeyRow());
+  addKeyRow('Agente 1');
+
+  // ---------- Log ----------
+  const logEl = document.getElementById('log');
+  function log(msg, {agentColor=null, cls=''} = {}){
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    const time = new Date().toLocaleTimeString('pt-BR', {hour12:false});
+    let badge = '';
+    if(agentColor) badge = `<span class="log-badge" style="background:${agentColor}22; color:${agentColor}">agente</span>`;
+    line.innerHTML = `<span class="log-time">${time}</span>${badge}<span class="log-msg ${cls}">${msg}</span>`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
   }
-  let lastErr = null;
-  for(let attempt=0; attempt<cfg.keys.length; attempt++){
-    const idx = keyPointer % cfg.keys.length;
-    const key = cfg.keys[idx];
-    try{
-      let res;
+
+  // ---------- Progress ----------
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  function setProgress(pct, label){
+    progressFill.style.width = Math.max(0,Math.min(100,pct))+'%';
+    progressLabel.textContent = label;
+  }
+
+  // ---------- Section chips ----------
+  const chipsEl = document.getElementById('sectionsChips');
+  function renderChips(){
+    chipsEl.innerHTML = '';
+    state.sections.forEach(s => {
+      const chip = document.createElement('span');
+      chip.className = 'section-chip ' + (s.status === 'done' ? 'done' : s.status === 'error' ? 'err' : '');
+      chip.innerHTML = `<span class="sw" style="background:${s.status==='done' ? 'var(--green)' : s.status==='error' ? 'var(--red)' : 'var(--text-faint)'}"></span>${s.name}`;
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  // ---------- Gemini call ----------
+  function nextKey(){
+    const usable = state.keys.filter(k => k.key && k.status !== 'bad');
+    if(usable.length === 0) return null;
+    const k = usable[state.keyCursor % usable.length];
+    state.keyCursor++;
+    return k;
+  }
+
+  async function callGemini(agentKey, prompt, {json=false, maxTokens=8192, temperature=0.45, retries=1} = {}){
+    const model = document.getElementById('modelSelect').value;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const body = {
+      contents: [{ role:'user', parts:[{text: prompt}] }],
+      generationConfig: {
+        maxOutputTokens: maxTokens,
+        temperature,
+        ...(json ? {responseMimeType:'application/json'} : {})
+      }
+    };
+    let lastErr = null;
+    for(let attempt=0; attempt <= retries; attempt++){
       try{
-        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`, {
+        const res = await fetch(url, {
           method:'POST',
-          headers:{'Content-Type':'application/json','x-goog-api-key':key},
-          body: JSON.stringify({
-            contents: contents,
-            systemInstruction: systemInstruction ? {parts:[{text:systemInstruction}]} : undefined,
-            generationConfig: { maxOutputTokens: maxOutputTokens || 2048 }
-          })
+          headers:{'Content-Type':'application/json', 'x-goog-api-key': agentKey.key},
+          body: JSON.stringify(body)
         });
-      }catch(networkErr){
-        lastErr = new Error('falha de conexão com a API do Google — verifique sua internet e tente de novo.');
-        keyPointer++;
-        continue;
-      }
-
-      if(res.status === 429){
-        lastErr = new Error(`chave ${idx+1} de ${cfg.keys.length}: ${friendlyApiError(429)}`);
-        keyPointer++;
-        continue;
-      }
-      if(res.status === 401 || res.status === 403){
-        const body = await res.text();
-        const e = new Error(`chave ${idx+1} de ${cfg.keys.length}: ${friendlyApiError(res.status, body)}`);
-        e.isAuth = true;
+        if(!res.ok){
+          const errText = await res.text();
+          throw new Error(`HTTP ${res.status}: ${errText.slice(0,200)}`);
+        }
+        const data = await res.json();
+        agentKey.status = 'ok';
+        const text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts || [])
+          .map(p => p.text || '').join('');
+        if(!text) throw new Error('resposta vazia do modelo (pode ter sido bloqueada)');
+        return text;
+      }catch(e){
         lastErr = e;
-        keyPointer++;
-        continue;
+        agentKey.status = 'bad';
+        await sleep(400);
       }
-      if(!res.ok){
-        const body = await res.text();
-        const e = new Error(friendlyApiError(res.status, body));
-        if(res.status === 400 || res.status === 404) throw e; // erro de configuração, não adianta trocar de chave
-        lastErr = e;
-        keyPointer++;
-        continue;
-      }
-      const data = await res.json();
-      updateKeyIndicator();
-      const parts = data?.candidates?.[0]?.content?.parts;
-      if(!parts){
-        const blockReason = data?.promptFeedback?.blockReason;
-        throw new Error(blockReason ? `resposta bloqueada por segurança (${blockReason})` : 'resposta vazia da API');
-      }
-      return parts.map(p=>p.text||'').join('');
-    }catch(err){
-      if(err.message && (err.message.startsWith('pedido inválido') || err.message.startsWith('modelo não encontrado'))) throw err;
-      lastErr = err;
-      keyPointer++;
-      continue;
     }
+    throw lastErr;
   }
-  throw lastErr || new Error('todas as chaves configuradas falharam');
-}
 
-function toGeminiContents(hist, extraUserText){
-  const contents = hist.map(m=>({role: m.role, parts:[{text:m.text}]}));
-  if(extraUserText) contents.push({role:'user', parts:[{text:extraUserText}]});
-  return contents;
-}
+  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
-// ---------- pipeline ----------
-async function runStage(stageId, label, fn){
-  setStation(stageId,'active');
-  statusLine.textContent = `etapa ${STAGES.findIndex(s=>s.id===stageId)+1}/${STAGES.length} · ${label}...`;
-  try{
-    const result = await fn();
-    setStation(stageId,'done');
-    return result;
-  }catch(err){
-    setStation(stageId,'error');
-    err.failedStage = stageId;
-    throw err;
+  function parseJsonLoose(text){
+    let t = text.trim();
+    t = t.replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
+    return JSON.parse(t);
   }
-}
 
-async function runPipeline(userText){
-  const stageOutputs = {};
-
-  // 1. planejar
-  const planSys = `Você é a etapa de PLANEJAMENTO de um pipeline de resposta. Leia o pedido do usuário e o histórico da conversa. Escreva um plano curto (3 a 6 tópicos) do que a resposta final deve conter e em que ordem, sem escrever a resposta em si. Responda no mesmo idioma da mensagem do usuário. Seja direto, sem introduções.`;
-  const plan = await runStage('plan','planejando', ()=> geminiCall(toGeminiContents(history, userText), planSys, 500));
-  stageOutputs.plan = plan;
-
-  // 2. rascunhar
-  const draftSys = `Você é a etapa de RASCUNHO de um pipeline de resposta. Use o plano abaixo e o histórico da conversa para escrever uma resposta completa e útil ao pedido do usuário. Pode usar blocos de código markdown (\`\`\`linguagem) quando fizer sentido. Responda no mesmo idioma da mensagem do usuário.\n\nPLANO:\n${plan}`;
-  const draft = await runStage('draft','rascunhando', ()=> geminiCall(toGeminiContents(history, userText), draftSys, 2200));
-  stageOutputs.draft = draft;
-
-  // 3. criticar
-  const criticSys = `Você é a etapa de CRÍTICA de um pipeline de resposta. Seja um revisor exigente. Releia o pedido original do usuário e o rascunho abaixo. Aponte, em lista curta, o que está errado, incompleto, confuso ou que poderia melhorar. Se o rascunho já estiver muito bom, diga isso claramente e liste só ajustes finos. Não reescreva a resposta inteira, só a crítica. Responda no mesmo idioma da mensagem do usuário.\n\nPEDIDO DO USUÁRIO:\n${userText}\n\nRASCUNHO:\n${draft}`;
-  const critique = await runStage('critic','revisando', ()=> geminiCall([{role:'user', parts:[{text:criticSys}]}], null, 500));
-  stageOutputs.critic = critique;
-
-  // 4. refinar
-  const refineSys = `Você é a etapa FINAL de um pipeline de resposta. Reescreva o rascunho incorporando a crítica, corrigindo o que for necessário. Entregue a resposta final, pronta para o usuário — sem falar sobre o processo, sem dizer "aqui está a versão revisada", apenas a resposta em si. Mantenha blocos de código markdown quando existirem. Responda no mesmo idioma da mensagem do usuário.\n\nPEDIDO DO USUÁRIO:\n${userText}\n\nRASCUNHO:\n${draft}\n\nCRÍTICA:\n${critique}`;
-  const final = await runStage('refine','refinando', ()=> geminiCall([{role:'user', parts:[{text:refineSys}]}], null, 2600));
-  stageOutputs.refine = final;
-
-  // 5. entregar
-  await runStage('ship','entregando', ()=> new Promise(r=>setTimeout(r,150)));
-
-  return {final, stageOutputs};
-}
-
-// ---------- extração de arquivos de blocos de código ----------
-const EXT_MAP = {
-  javascript:'js', js:'js', typescript:'ts', ts:'ts', python:'py', py:'py',
-  html:'html', css:'css', json:'json', java:'java', c:'c', cpp:'cpp', 'c++':'cpp',
-  csharp:'cs', cs:'cs', go:'go', rust:'rs', rb:'rb', ruby:'rb', php:'php',
-  sql:'sql', sh:'sh', bash:'sh', yaml:'yml', yml:'yml', xml:'xml', md:'md', markdown:'md',
-  lua:'lua', kotlin:'kt', swift:'swift'
-};
-function extractCodeBlocks(text){
-  const re = /```(\w+)?\n([\s\S]*?)```/g;
-  const blocks = [];
-  let m, i=0;
-  while((m = re.exec(text)) !== null){
-    i++;
-    const lang = (m[1]||'txt').toLowerCase();
-    const ext = EXT_MAP[lang] || 'txt';
-    blocks.push({lang, ext, code:m[2], filename:`rele-${lang}-${i}.${ext}`});
+  function commentPrefix(fileType){
+    if(fileType === 'html') return {open:'<!-- == SECAO: ', close: ' == -->'};
+    if(fileType === 'py') return {open:'# == SECAO: ', close: ' =='};
+    return {open:'// == SECAO: ', close: ' =='};
   }
-  return blocks;
-}
 
-// ---------- render de mensagens (markdown leve) ----------
-function escapeHtml(s){
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function lightMarkdown(text){
-  let escaped = escapeHtml(text);
-  escaped = escaped.replace(/```(\w+)?\n([\s\S]*?)```/g, (m,lang,code)=>{
-    return `<pre><code>${code}</code></pre>`;
+  // ---------- Pipeline ----------
+  const startBtn = document.getElementById('startBtn');
+  const stopBtn = document.getElementById('stopBtn');
+
+  startBtn.addEventListener('click', runPipeline);
+  stopBtn.addEventListener('click', () => {
+    state.stopRequested = true;
+    log('Parada solicitada pelo usuário — finalizando etapa atual...', {cls:'err'});
   });
-  escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
-  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  const paras = escaped.split(/\n{2,}/).map(p=>{
-    if(p.startsWith('<pre>')) return p;
-    return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+
+  async function runPipeline(){
+    const brief = document.getElementById('briefInput').value.trim();
+    const fileType = document.getElementById('fileTypeSelect').value;
+    const targetLines = parseInt(document.getElementById('targetLines').value, 10) || 400;
+
+    if(!brief){ alert('Descreva o que você quer que a IA construa.'); return; }
+    const validKeys = state.keys.filter(k => k.key);
+    if(validKeys.length === 0){ alert('Adicione pelo menos uma chave de API Gemini válida.'); return; }
+
+    state.running = true;
+    state.stopRequested = false;
+    state.sections = [];
+    state.keyCursor = 0;
+    logEl.innerHTML = '';
+    document.getElementById('outputPanel').classList.add('hidden');
+    startBtn.classList.add('hidden');
+    stopBtn.classList.remove('hidden');
+    setProgress(2, 'planejando o arquivo...');
+    log('Enviando o pedido para o agente planejador...', {cls:'hl'});
+
+    try{
+      // 1) PLANEJAMENTO
+      const planner = nextKey();
+      const planPrompt = `Você é o planejador de um sistema multi-agente que gera arquivos de código grandes e completos.
+
+Tarefa do usuário:
+"""
+${brief}
+"""
+
+Tipo de arquivo: ${fileType}
+Meta: pelo menos ${targetLines} linhas de código funcional no total, dividido em seções pequenas.
+
+Responda APENAS com um JSON neste formato exato:
+{"comando":"instrução clara e detalhada de implementação, resumindo o que o arquivo final deve fazer e como as seções se conectam","nomeArquivo":"nome-sugerido.${fileType}","secoes":[{"nome":"nome_curto_em_snake_case","descricao":"o que essa seção/função deve conter e fazer"}]}
+
+Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chegar perto da meta de linhas, mantendo coerência entre elas. Não escreva nada fora do JSON.`;
+
+      const planRaw = await callGemini(planner, planPrompt, {json:true, maxTokens:4096, temperature:0.5});
+      const plan = parseJsonLoose(planRaw);
+      state.command = plan.comando || brief;
+      state.fileNameSuggested = plan.nomeArquivo || `arquivo.${fileType}`;
+      state.sections = (plan.secoes || []).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
+      renderChips();
+      log(`Plano recebido: ${state.sections.length} seções.`, {agentColor:AGENT_COLORS[planner.colorIdx], cls:'ok'});
+
+      // 2) GERAÇÃO POR SEÇÃO (com expansão até atingir a meta de linhas, ou infinita até "parar")
+      const infiniteMode = document.getElementById('infiniteMode').checked;
+      const MAX_ROUNDS = infiniteMode ? 100000 : 200; // trava de segurança, não um limite prático de linhas
+      let round = 0;
+      while(!state.stopRequested && round < MAX_ROUNDS){
+        await generatePendingSections(fileType);
+        const totalLines = countLines();
+        setProgress(20 + Math.min(50, (totalLines/targetLines)*50), `${totalLines} / ${infiniteMode ? '∞' : targetLines} linhas geradas...`);
+        if((!infiniteMode && totalLines >= targetLines) || state.stopRequested) break;
+        round++;
+        log(`Linhas até agora: ${totalLines}${infiniteMode ? '' : '/'+targetLines}. Pedindo mais seções ao planejador...`, {cls:'hl'});
+        const more = nextKey();
+        // Envia só as últimas seções + a contagem total, não a lista inteira,
+        // para manter o prompt pequeno mesmo com milhares de linhas já geradas (economia de tokens).
+        const recentNames = state.sections.slice(-25).map(s => s.name).join(', ');
+        const gap = infiniteMode ? null : Math.max(0, targetLines - totalLines);
+        const avgLinesPerSection = totalLines > 0 ? Math.max(20, Math.round(totalLines / state.sections.length)) : 60;
+        const suggestedCount = infiniteMode ? 8 : Math.min(20, Math.max(3, Math.ceil(gap / avgLinesPerSection)));
+        const morePrompt = `O arquivo (tipo ${fileType}) sobre o seguinte projeto ainda está incompleto:
+"""
+${state.command}
+"""
+Total de seções já criadas: ${state.sections.length} (últimas: ${recentNames}).
+Linhas atuais: ${totalLines}. ${infiniteMode ? 'Modo infinito: continue propondo seções novas e úteis.' : `Meta: ${targetLines}.`}
+
+Proponha ${suggestedCount} seções NOVAS (funções, módulos, casos extras, testes, tratamento de erros, estilos, documentação, etc), sem repetir as existentes, para aproximar o arquivo da meta.
+Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
+        try{
+          const moreRaw = await callGemini(more, morePrompt, {json:true, maxTokens:2048, temperature:0.6});
+          const moreParsed = parseJsonLoose(moreRaw);
+          const newOnes = (moreParsed.secoes||[]).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
+          if(newOnes.length === 0){
+            state.stagnantRounds = (state.stagnantRounds||0) + 1;
+            if(state.stagnantRounds >= 4){ log('O planejador parou de propor seções novas. Encerrando a expansão.', {cls:'err'}); break; }
+          } else {
+            state.stagnantRounds = 0;
+          }
+          state.sections.push(...newOnes);
+          renderChips();
+        }catch(e){
+          log('Não foi possível expandir mais seções, seguindo com o que já foi gerado.', {cls:'err'});
+          break;
+        }
+      }
+
+      if(state.stopRequested){
+        log('Pipeline interrompido pelo usuário antes da verificação.', {cls:'err'});
+        finalizeOutput(fileType);
+        return;
+      }
+
+      // 3) VERIFICAÇÃO + CORREÇÃO
+      setProgress(75, 'revisando o arquivo com os agentes verificadores...');
+      let verifyRound = 0;
+      const maxVerifyRounds = state.sections.length > 60 ? 6 : 3;
+      while(!state.stopRequested && verifyRound < maxVerifyRounds){
+        const stillOk = await verifyAndFix(fileType);
+        verifyRound++;
+        if(stillOk) break;
+      }
+
+      // 4) FINALIZAÇÃO
+      setProgress(100, 'arquivo finalizado.');
+      log('Todos os agentes concluíram a montagem e revisão do arquivo.', {cls:'ok'});
+      finalizeOutput(fileType);
+
+    }catch(e){
+      log('Erro no pipeline: ' + e.message, {cls:'err'});
+      setProgress(0, 'erro — veja o log');
+    }finally{
+      state.running = false;
+      startBtn.classList.remove('hidden');
+      stopBtn.classList.add('hidden');
+    }
+  }
+
+  async function generateOneSection(sec, fileType, allNames){
+    const agent = nextKey();
+    if(!agent){ sec.status = 'error'; log('Nenhuma chave válida disponível.', {cls:'err'}); return; }
+    log(`Gerando seção "${sec.name}"...`, {agentColor:AGENT_COLORS[agent.colorIdx]});
+    const prompt = `Você é um agente de codificação colaborando com outros agentes para montar UM ÚNICO arquivo final, seção por seção.
+
+Instrução geral do projeto:
+"""
+${state.command}
+"""
+
+Todas as seções planejadas, em ordem: ${allNames}
+
+Gere APENAS o código da seção abaixo, em ${fileType}, compatível em estilo e nomes com as demais seções.
+
+Seção: "${sec.name}"
+Descrição: ${sec.description}
+
+Regras:
+- Responda SOMENTE com código, sem markdown, sem blocos \`\`\`, sem explicações antes ou depois.
+- Não repita código de outras seções.
+- Comentários dentro do código são bem-vindos quando ajudam a entender.`;
+    try{
+      const code = await callGemini(agent, prompt, {json:false, maxTokens:8192, temperature:0.4});
+      sec.code = stripFences(code);
+      sec.status = 'done';
+    }catch(e){
+      sec.status = 'error';
+      log(`Falha ao gerar "${sec.name}": ${e.message}`, {cls:'err'});
+    }
+    renderChips();
+  }
+
+  // Gera as seções pendentes em lotes paralelos — várias chaves/agentes trabalham
+  // ao mesmo tempo em seções diferentes, em vez de uma de cada vez.
+  async function generatePendingSections(fileType){
+    const allNames = state.sections.map(s => s.name).join(', ');
+    const concurrency = Math.max(1, parseInt(document.getElementById('concurrencySelect').value, 10) || 1);
+    let pending = state.sections.filter(s => s.status === 'pending');
+    while(pending.length && !state.stopRequested){
+      const batch = pending.slice(0, concurrency);
+      await Promise.all(batch.map(sec => generateOneSection(sec, fileType, allNames)));
+      await sleep(150);
+      pending = state.sections.filter(s => s.status === 'pending');
+    }
+  }
+
+  function stripFences(text){
+    let t = text.trim();
+    t = t.replace(/^```[a-zA-Z]*\n?/,'').replace(/```$/,'');
+    return t.trim();
+  }
+
+  function mergedCode(fileType){
+    const cp = commentPrefix(fileType);
+    return state.sections
+      .filter(s => s.code)
+      .map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`)
+      .join('\n\n');
+  }
+
+  function countLines(){
+    return state.sections.reduce((acc,s) => acc + (s.code ? s.code.split('\n').length : 0), 0);
+  }
+
+  function renderMergedPreviewLive(fileType){
+    // leve atualização do log de progresso, sem mexer na aba de output ainda
+  }
+
+  // Divide as seções já geradas em lotes de ~N linhas, para que a verificação
+  // nunca precise mandar o arquivo inteiro numa única chamada (gasta menos tokens
+  // por vez, funciona mesmo com arquivos de milhares de linhas).
+  function chunkSectionsByLines(maxLinesPerChunk){
+    const done = state.sections.filter(s => s.code);
+    const chunks = [];
+    let current = [];
+    let currentLines = 0;
+    for(const sec of done){
+      const secLines = sec.code.split('\n').length;
+      if(current.length && currentLines + secLines > maxLinesPerChunk){
+        chunks.push(current);
+        current = [];
+        currentLines = 0;
+      }
+      current.push(sec);
+      currentLines += secLines;
+    }
+    if(current.length) chunks.push(current);
+    return chunks;
+  }
+
+  async function verifyChunk(chunkSecs, fileType){
+    const verifier = nextKey();
+    if(!verifier) return [];
+    const cp = commentPrefix(fileType);
+    const code = chunkSecs.map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`).join('\n\n');
+    log(`Verificando lote com ${chunkSecs.length} seção(ões)...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
+    const prompt = `Você é o agente verificador. Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e procure erros de sintaxe, bugs lógicos, referências quebradas ou inconsistências dentro deste trecho.
+
+As seções estão marcadas por comentários indicando o nome de cada uma.
+
+Trecho:
+"""
+${code}
+"""
+
+Responda apenas com JSON:
+{"temErros": true/false, "problemas": [{"secao": "nome_da_secao_exato", "problema": "descrição objetiva do erro", "sugestaoDeCorrecao": "como corrigir"}]}
+
+Se não houver problemas relevantes, responda {"temErros": false, "problemas": []}.`;
+    try{
+      const raw = await callGemini(verifier, prompt, {json:true, maxTokens:3072, temperature:0.2});
+      const result = parseJsonLoose(raw);
+      return (result.temErros && result.problemas) ? result.problemas : [];
+    }catch(e){
+      log('Verificação de um lote falhou, mantendo esse trecho como está.', {cls:'err'});
+      return [];
+    }
+  }
+
+  async function fixSection(sec, prob){
+    const fixer = nextKey();
+    if(!fixer) return;
+    log(`Corrigindo seção "${sec.name}"...`, {agentColor:AGENT_COLORS[fixer.colorIdx]});
+    const fixPrompt = `Corrija a seção de código abaixo com base no problema identificado. Mantenha o mesmo propósito e compatibilidade com o restante do projeto.
+
+Projeto:
+"""
+${state.command}
+"""
+
+Seção: "${sec.name}"
+Código atual:
+"""
+${sec.code}
+"""
+
+Problema identificado: ${prob.problema}
+Sugestão de correção: ${prob.sugestaoDeCorrecao}
+
+Responda SOMENTE com o código corrigido e completo dessa seção, sem markdown, sem explicações.`;
+    try{
+      const fixed = await callGemini(fixer, fixPrompt, {json:false, maxTokens:8192, temperature:0.3});
+      sec.code = stripFences(fixed);
+    }catch(e){
+      log(`Não foi possível corrigir "${sec.name}": ${e.message}`, {cls:'err'});
+    }
+  }
+
+  async function verifyAndFix(fileType){
+    const chunkLines = Math.max(200, parseInt(document.getElementById('verifyChunkLines').value, 10) || 800);
+    const concurrency = Math.max(1, parseInt(document.getElementById('concurrencySelect').value, 10) || 1);
+    const chunks = chunkSectionsByLines(chunkLines);
+    log(`Verificação dividida em ${chunks.length} lote(s) para não gastar tudo de uma vez.`, {cls:'hl'});
+
+    // Verifica os lotes em paralelo (respeitando o paralelismo escolhido)
+    const allProblems = [];
+    for(let i = 0; i < chunks.length; i += concurrency){
+      if(state.stopRequested) break;
+      const slice = chunks.slice(i, i + concurrency);
+      const results = await Promise.all(slice.map(c => verifyChunk(c, fileType)));
+      results.forEach(probs => allProblems.push(...probs));
+    }
+
+    if(allProblems.length === 0){
+      log('Nenhum problema encontrado pela verificação.', {cls:'ok'});
+      return true;
+    }
+
+    log(`Verificação encontrou ${allProblems.length} problema(s) no total. Todos os agentes param e corrigem juntos...`, {cls:'err'});
+    // Corrige as seções problemáticas em paralelo, várias IAs ao mesmo tempo
+    for(let i = 0; i < allProblems.length; i += concurrency){
+      if(state.stopRequested) break;
+      const slice = allProblems.slice(i, i + concurrency);
+      await Promise.all(slice.map(prob => {
+        const sec = state.sections.find(s => s.name === prob.secao);
+        return sec ? fixSection(sec, prob) : Promise.resolve();
+      }));
+    }
+    return false;
+  }
+
+  // ---------- Output ----------
+  const outputPanel = document.getElementById('outputPanel');
+  const codeView = document.getElementById('codeView');
+  const previewFrame = document.getElementById('previewFrame');
+  const tabCode = document.getElementById('tabCode');
+  const tabPreview = document.getElementById('tabPreview');
+  const fileNameInput = document.getElementById('fileNameInput');
+
+  function finalizeOutput(fileType){
+    const code = mergedCode(fileType);
+    codeView.textContent = code;
+    outputPanel.classList.remove('hidden');
+    document.getElementById('outputMeta').textContent = `— ${state.sections.filter(s=>s.status==='done').length}/${state.sections.length} seções`;
+    document.getElementById('lineCountLabel').textContent = `${code.split('\n').length} linhas`;
+    fileNameInput.value = state.fileNameSuggested || `arquivo.${fileType}`;
+    const canPreview = fileType === 'html' && /<\/?[a-z][\s\S]*>/i.test(code);
+    tabPreview.style.display = canPreview ? '' : 'none';
+    showTab('code');
+    outputPanel.scrollIntoView({behavior:'smooth', block:'start'});
+  }
+
+  function showTab(which){
+    if(which === 'code'){
+      codeView.classList.remove('hidden');
+      previewFrame.classList.add('hidden');
+      tabCode.classList.add('active');
+      tabPreview.classList.remove('active');
+    }else{
+      previewFrame.srcdoc = codeView.textContent;
+      codeView.classList.add('hidden');
+      previewFrame.classList.remove('hidden');
+      tabPreview.classList.add('active');
+      tabCode.classList.remove('active');
+    }
+  }
+  tabCode.addEventListener('click', () => showTab('code'));
+  tabPreview.addEventListener('click', () => showTab('preview'));
+
+  document.getElementById('downloadBtn').addEventListener('click', () => {
+    const blob = new Blob([codeView.textContent], {type:'text/plain;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileNameInput.value.trim() || 'arquivo.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   });
-  return paras.join('');
-}
-
-function downloadText(filename, text){
-  const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function addMessage(role, text, stageOutputs){
-  emptyState.style.display = 'none';
-  const wrap = document.createElement('div');
-  wrap.className = 'msg ' + (role==='user' ? 'user' : 'assistant');
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.innerHTML = lightMarkdown(text);
-  wrap.appendChild(bubble);
-
-  if(role === 'assistant'){
-    const blocks = extractCodeBlocks(text);
-    if(blocks.length || text.length > 40){
-      const filesRow = document.createElement('div');
-      filesRow.className = 'files-row';
-      blocks.forEach(b=>{
-        const chip = document.createElement('div');
-        chip.className = 'file-chip';
-        chip.innerHTML = `<span class="dl-icon">⭳</span> ${b.filename}`;
-        chip.addEventListener('click', ()=> downloadText(b.filename, b.code));
-        filesRow.appendChild(chip);
-      });
-      const mdChip = document.createElement('div');
-      mdChip.className = 'file-chip';
-      mdChip.innerHTML = `<span class="dl-icon">⭳</span> resposta-completa.md`;
-      mdChip.addEventListener('click', ()=> downloadText('resposta-completa.md', text));
-      filesRow.appendChild(mdChip);
-      wrap.appendChild(filesRow);
-    }
-
-    if(stageOutputs){
-      const details = document.createElement('details');
-      details.className = 'process-log';
-      const summary = document.createElement('summary');
-      summary.textContent = 'ver processo passo a passo (5 estações)';
-      details.appendChild(summary);
-      STAGES.slice(0,4).forEach(s=>{
-        const stageDiv = document.createElement('div');
-        stageDiv.className = 'process-stage';
-        stageDiv.innerHTML = `<div class="stage-name">${s.name}</div><div class="stage-text"></div>`;
-        stageDiv.querySelector('.stage-text').textContent = stageOutputs[s.id] || '';
-        details.appendChild(stageDiv);
-      });
-      wrap.appendChild(details);
-    }
-  }
-
-  chatEl.appendChild(wrap);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-function addError(msg, isAuth){
-  emptyState.style.display = 'none';
-  const wrap = document.createElement('div');
-  wrap.className = 'msg assistant';
-  const note = document.createElement('div');
-  note.className = 'error-note';
-  note.innerHTML = `⚠ ${escapeHtml(msg)}`;
-  if(isAuth){
-    const link = document.createElement('span');
-    link.className = 'fix-link';
-    link.textContent = 'abrir configurar chaves →';
-    link.addEventListener('click', ()=> openSettings(true));
-    note.appendChild(document.createElement('br'));
-    note.appendChild(link);
-  }
-  wrap.appendChild(note);
-  chatEl.appendChild(wrap);
-  chatEl.scrollTop = chatEl.scrollHeight;
-}
-
-// ---------- envio ----------
-const form = $('#composer');
-const input = $('#input');
-const sendBtn = $('#send-btn');
-
-input.addEventListener('input', ()=>{
-  input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 160)+'px';
-});
-input.addEventListener('keydown', (e)=>{
-  if(e.key==='Enter' && !e.shiftKey){
-    e.preventDefault();
-    form.requestSubmit();
-  }
-});
-
-form.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  if(busy) return;
-  const text = input.value.trim();
-  if(!text) return;
-  if(!cfg.keys.length){
-    $('#settings-btn').click();
-    return;
-  }
-
-  addMessage('user', text);
-  input.value = ''; input.style.height='auto';
-  busy = true; sendBtn.disabled = true;
-  resetStations();
-  statusLine.textContent = 'processando na esteira...';
-
-  try{
-    const {final, stageOutputs} = await runPipeline(text);
-    history.push({role:'user', text});
-    history.push({role:'model', text:final});
-    addMessage('assistant', final, stageOutputs);
-    statusLine.textContent = 'pronto';
-  }catch(err){
-    addError(err.message || 'falha desconhecida no pipeline', !!err.isAuth);
-    statusLine.textContent = err.failedStage ? `erro na etapa "${err.failedStage}"` : 'erro';
-  }finally{
-    busy = false; sendBtn.disabled = false;
-    updateKeyIndicator();
-  }
-});
 
 })();
 </script>
