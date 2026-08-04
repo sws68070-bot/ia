@@ -270,7 +270,7 @@
       </div>
     </div>
     <button class="run" id="runBtn" onclick="runPipeline()">Rodar a linha de montagem</button>
-    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As chamadas revezam entre as chaves que você adicionar; com mais chaves, mais coisa roda em paralelo de verdade (as IAs "trabalhando juntas" ao mesmo tempo) e mais rápido a linha de montagem termina. Com poucas chaves, a mesma é reaproveitada mais vezes, com pausas ajustadas ao modelo escolhido e reenvio automático se o servidor do Gemini estiver sobrecarregado (503). Se uma chave estourar a cota (erro 429), só ela fica de descanso pelo tempo que o próprio Google informa — as outras continuam sendo usadas normalmente, sem parar a linha de montagem inteira. O processo pode levar de alguns minutos a bem mais, dependendo de quantas funções a lista final tiver.</div>
+    <div class="note">As chaves ficam só no seu navegador e vão direto pra API do Google (generativelanguage.googleapis.com) — nenhum outro servidor no meio. As chamadas revezam entre as chaves que você adicionar; com mais chaves, mais coisa roda em paralelo de verdade (as IAs "trabalhando juntas" ao mesmo tempo) e mais rápido a linha de montagem termina. Com poucas chaves, a mesma é reaproveitada mais vezes, com pausas ajustadas ao modelo escolhido e reenvio automático se o servidor do Gemini estiver sobrecarregado (503). Erro de cota (429) passageiro (por minuto) é tratado sozinho — só a chave afetada descansa o tempo que o Google pedir, as outras seguem normais. Já cota diária ou de plano esgotada (quando a API não indica tempo de espera) não tem como ser contornada por aqui — nesse caso a linha de montagem para rápido com uma mensagem explicando as opções, em vez de ficar tentando à toa por minutos. O processo pode levar de alguns minutos a bem mais, dependendo de quantas funções a lista final tiver.</div>
   </div>
 
   <div class="progress-wrap">
@@ -612,14 +612,18 @@ async function callGemini(apiKey, model, systemInstruction, userMsg, maxTokens){
   return cand.content.parts.map(p => p.text || "").join("\n");
 }
 
-// Tenta de novo em caso de sobrecarga (503) ou limite de taxa (429), com espera
-// crescente entre tentativas. A cada nova tentativa usa a próxima chave do
-// rodízio — se você tiver mais de uma chave, isso já ajuda a contornar o problema.
+// Tenta de novo em caso de sobrecarga (503) ou limite de taxa passageiro (429
+// com tempo de espera indicado pela própria API). Se o 429 vier SEM tempo de
+// espera sugerido, isso normalmente é cota diária ou de plano esgotada, não
+// algo passageiro — nesse caso, assim que todas as chaves adicionadas já
+// tiverem batido nesse mesmo tipo de erro nesta chamada, desiste na hora com
+// uma mensagem clara em vez de continuar tentando por várias rodadas à toa.
 async function callWithRetry(model, system, userMsg, maxTokens, onRetry, maxAttempts){
   let lastErr;
+  const hardQuotaKeys = new Set();
   for(let attempt = 1; attempt <= maxAttempts; attempt++){
     const key = await acquireKey((waitSec) => {
-      if(onRetry) onRetry(attempt, maxAttempts, waitSec, 'todas as chaves em descanso por cota, aguardando');
+      if(onRetry) onRetry(`todas as chaves em descanso por cota, aguardando ${waitSec}s (tentativa ${attempt}/${maxAttempts})`);
     });
     try{
       const result = await callGemini(key, model, system, userMsg, maxTokens);
@@ -629,18 +633,33 @@ async function callWithRetry(model, system, userMsg, maxTokens, onRetry, maxAtte
       if(!isRetryable(err) || attempt === maxAttempts) throw err;
 
       if(err.httpStatus === 429){
-        // cota estourada é da chave/projeto, não do servidor em geral — só
-        // essa chave descansa (pelo tempo que o próprio Google pediu, se
-        // informado); se sobrar outra chave livre, a próxima tentativa nem
-        // espera nada, já troca de chave na hora
-        const cooldownMs = err.retryDelayMs || 30000;
-        markKeyCooldown(key, cooldownMs);
-        if(onRetry) onRetry(attempt, maxAttempts, Math.round(cooldownMs/1000), 'chave em descanso por cota, trocando');
+        if(err.retryDelayMs){
+          // limite passageiro (por minuto) — a própria API disse quanto
+          // esperar. só essa chave descansa esse tempo, as outras seguem
+          // no rodízio normalmente
+          markKeyCooldown(key, err.retryDelayMs);
+          if(onRetry) onRetry(`chave em descanso por cota, trocando (tentativa ${attempt}/${maxAttempts}, ${Math.round(err.retryDelayMs/1000)}s)`);
+        } else {
+          // sem tempo de espera sugerido — sinal forte de cota diária/de
+          // plano esgotada. Não adianta ficar tentando: marca a chave por
+          // bastante tempo e, se TODAS as chaves já caíram nesse mesmo tipo
+          // de erro nesta chamada, desiste na hora com mensagem clara
+          markKeyCooldown(key, 10 * 60 * 1000);
+          hardQuotaKeys.add(key);
+          if(hardQuotaKeys.size >= apiKeys.length){
+            const quotaErr = new Error(
+              'Cota esgotada em todas as chaves adicionadas, e o Google não indicou tempo de espera — isso costuma significar limite diário ou de plano, não algo passageiro (tentar de novo agora não deve resolver). Opções: esperar o reset diário da cota gratuita, adicionar uma chave de outro projeto/conta Google (cada uma tem cota própria), ou conferir o limite do modelo escolhido em ai.google.dev/gemini-api/docs/rate-limits.'
+            );
+            quotaErr.httpStatus = 429;
+            throw quotaErr;
+          }
+          if(onRetry) onRetry(`cota esgotada sem tempo de espera indicado, tentando outra chave (tentativa ${attempt}/${maxAttempts})`);
+        }
       } else {
         // 503 / sobrecarga é do servidor, não da chave específica — espera
         // curta com backoff crescente e tenta de novo
         const backoff = Math.min(1500 * Math.pow(1.8, attempt - 1), 12000) + Math.random() * 500;
-        if(onRetry) onRetry(attempt, maxAttempts, Math.round(backoff/1000), 'servidor ocupado, tentando de novo');
+        if(onRetry) onRetry(`servidor ocupado, tentando de novo (tentativa ${attempt}/${maxAttempts}) em ${Math.round(backoff/1000)}s`);
         await sleep(backoff);
       }
     }
@@ -747,9 +766,7 @@ async function runPipeline(){
     setStage(num, `<span class="spinner"></span> ${label}`, 'active');
     try{
       const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 8192,
-        (attempt, max, waitSec, reason) => setStage(num,
-          `<span class="spinner"></span> ${reason || 'tentando de novo'} (${attempt}/${max}) em ${waitSec}s`,
-          'active'),
+        (statusText) => setStage(num, `<span class="spinner"></span> ${statusText}`, 'active'),
         8
       );
       markKeyUsed(num, key);
@@ -767,8 +784,7 @@ async function runPipeline(){
   // chamada "de linha de função" (usada dentro da etapa 4, atualiza uma linha da lista dinâmica)
   async function funcCall(rowIndex, system, userMsg, maxTokens){
     const { result: out, key } = await callWithRetry(model, system, userMsg, maxTokens || 4096,
-      (attempt, max, waitSec, reason) => setFuncRowStatus(rowIndex, 'active',
-        `${reason || 'tentando de novo'} (${attempt}/${max}) em ${waitSec}s`),
+      (statusText) => setFuncRowStatus(rowIndex, 'active', statusText),
       8
     );
     markFuncRowKey(rowIndex, key);
