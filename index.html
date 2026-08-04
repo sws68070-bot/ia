@@ -76,15 +76,21 @@
   /* ---- keys panel ---- */
   #keysList{display:flex; flex-direction:column; gap:8px; margin-bottom:12px;}
   .key-row{
-    display:grid; grid-template-columns:14px 1fr 1fr auto; gap:10px; align-items:center;
+    display:grid; grid-template-columns:14px 1fr 1fr 148px auto; gap:10px; align-items:center;
     background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
   }
+  @media (max-width:720px){.key-row{grid-template-columns:14px 1fr auto; grid-template-areas:"sw label del" "empty key key" "empty role role"; row-gap:6px;}}
   .key-swatch{width:10px;height:10px;border-radius:50%;}
   .key-row input{
     background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:12.5px;
     outline:none; width:100%;
   }
   .key-row input::placeholder{color:var(--text-faint);}
+  .key-row select.role-select{
+    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:6px; color:var(--text-dim);
+    font-family:var(--mono); font-size:11px; padding:5px 6px; outline:none; width:100%;
+  }
+  .key-row select.role-select:focus{border-color:var(--cyan);}
   .key-row button{
     background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px;
   }
@@ -191,7 +197,7 @@
     <div id="keysList"></div>
     <button class="btn-add" id="addKeyBtn">+ adicionar chave</button>
     <div class="keys-note">
-      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). O arquivo cresce seção por seção — por isso não há limite real de linhas (funciona para 9000+ linhas ou no modo infinito), e a verificação final é feita em lotes pequenos para não gastar tudo de uma vez. Trate suas chaves como senhas.
+      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção — por isso não há limite real de linhas (funciona para 9000+ linhas ou no modo infinito), e a verificação final é feita em lotes pequenos para não gastar tudo de uma vez. Trate suas chaves como senhas.
     </div>
   </section>
 
@@ -260,13 +266,19 @@
     <div id="sectionsChips" style="margin-top:12px;"></div>
   </section>
 
+  <section class="panel hidden" id="baseFilePanel">
+    <h2>04 · Arquivo base / contrato compartilhado <span class="n">— enviado a todos os agentes</span></h2>
+    <p class="sub" style="max-width:none; margin-bottom:10px;">O agente planejador gera este esqueleto (variáveis globais, nomes e assinaturas de função) antes de qualquer seção. Todo agente de geração, expansão e verificação recebe este contrato junto do prompt, para que ninguém invente nomes divergentes.</p>
+    <div id="baseFileView" style="max-height:220px; overflow:auto; background:#080a0e; border:1px solid var(--border); border-radius:8px; padding:14px; font-family:var(--mono); font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; color:#c9d1e0;"></div>
+  </section>
+
   <section class="panel">
-    <h2>04 · Log dos agentes</h2>
+    <h2>05 · Log dos agentes</h2>
     <div id="log"></div>
   </section>
 
   <section class="panel hidden" id="outputPanel">
-    <h2>05 · Arquivo final <span class="n" id="outputMeta"></span></h2>
+    <h2>06 · Arquivo final <span class="n" id="outputMeta"></span></h2>
     <div class="output-tabs">
       <button class="tab-btn active" id="tabCode">código</button>
       <button class="tab-btn" id="tabPreview">visualizar</button>
@@ -287,22 +299,24 @@
   const AGENT_COLORS = ['#4fd1c5','#f2b84b','#e8618c','#7ed957','#5b8def','#c792ea'];
   let keyIdSeq = 0;
   const state = {
-    keys: [],        // {id, label, key, colorIdx, status}
+    keys: [],        // {id, label, key, colorIdx, status, role}  role: 'both' | 'gen' | 'verify'
     running: false,
     stopRequested: false,
-    keyCursor: 0,
+    genCursor: 0,
+    verifyCursor: 0,
     sections: [],     // {name, description, code, status}
     command: '',
     fileNameSuggested: '',
+    baseFile: '',     // contrato compartilhado: variáveis/funções globais que todas as seções devem seguir
   };
 
   // ---------- Keys UI ----------
   const keysList = document.getElementById('keysList');
 
-  function addKeyRow(label='', key=''){
+  function addKeyRow(label='', key='', role='both'){
     const id = 'k'+(keyIdSeq++);
     const colorIdx = state.keys.length % AGENT_COLORS.length;
-    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle'});
+    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle', role});
     renderKeys();
   }
 
@@ -315,10 +329,18 @@
         <div class="key-swatch" style="background:${AGENT_COLORS[k.colorIdx]}"></div>
         <input type="text" data-field="label" placeholder="rótulo (ex: Planejador)" value="${escapeAttr(k.label)}">
         <input type="password" data-field="key" placeholder="cole sua chave da API Gemini" value="${escapeAttr(k.key)}">
+        <select class="role-select" data-field="role" title="o que esta chave pode fazer no pipeline">
+          <option value="both">geração + verificação</option>
+          <option value="gen">só geração</option>
+          <option value="verify">só verificação</option>
+        </select>
         <button title="remover">✕</button>
       `;
       row.querySelector('[data-field=label]').addEventListener('input', e => k.label = e.target.value);
       row.querySelector('[data-field=key]').addEventListener('input', e => k.key = e.target.value.trim());
+      const roleSelect = row.querySelector('[data-field=role]');
+      roleSelect.value = k.role || 'both';
+      roleSelect.addEventListener('change', e => k.role = e.target.value);
       row.querySelector('button').addEventListener('click', () => {
         state.keys = state.keys.filter(x => x.id !== k.id);
         renderKeys();
@@ -366,11 +388,19 @@
   }
 
   // ---------- Gemini call ----------
-  function nextKey(){
+  // Seleciona a próxima chave adequada para um papel ('gen' geração/planejamento ou 'verify' verificação/correção).
+  // Chaves marcadas com o papel exato têm prioridade; chaves "both" servem para qualquer papel;
+  // se nenhuma chave dedicada estiver disponível, cai para qualquer chave utilizável (para não travar
+  // o pipeline de quem só cadastrou uma chave).
+  function nextKey(role='gen'){
     const usable = state.keys.filter(k => k.key && k.status !== 'bad');
     if(usable.length === 0) return null;
-    const k = usable[state.keyCursor % usable.length];
-    state.keyCursor++;
+    const exact = usable.filter(k => (k.role || 'both') === role);
+    const flexible = usable.filter(k => (k.role || 'both') === 'both');
+    const pool = exact.length ? exact : (flexible.length ? flexible : usable);
+    const cursorField = role === 'verify' ? 'verifyCursor' : 'genCursor';
+    const k = pool[state[cursorField] % pool.length];
+    state[cursorField]++;
     return k;
   }
 
@@ -448,18 +478,24 @@
     state.running = true;
     state.stopRequested = false;
     state.sections = [];
-    state.keyCursor = 0;
+    state.baseFile = '';
+    state.genCursor = 0;
+    state.verifyCursor = 0;
     logEl.innerHTML = '';
     document.getElementById('outputPanel').classList.add('hidden');
+    document.getElementById('baseFilePanel').classList.add('hidden');
+    document.getElementById('baseFileView').textContent = '';
     startBtn.classList.add('hidden');
     stopBtn.classList.remove('hidden');
     setProgress(2, 'planejando o arquivo...');
     log('Enviando o pedido para o agente planejador...', {cls:'hl'});
 
     try{
-      // 1) PLANEJAMENTO
-      const planner = nextKey();
-      const planPrompt = `Você é o planejador de um sistema multi-agente que gera arquivos de código grandes e completos.
+      // 1) PLANEJAMENTO — o planejador também escreve o "arquivo base": um contrato
+      // com as variáveis globais e assinaturas de função que todo o resto do pipeline
+      // deve respeitar, para as seções não inventarem nomes/assinaturas divergentes.
+      const planner = nextKey('gen');
+      const planPrompt = `Você é o planejador de um sistema multi-agente que gera arquivos de código grandes e completos. Outros agentes, cada um vendo só a descrição da própria seção, vão escrever o código em paralelo — por isso seu plano precisa deixar um contrato explícito para todos seguirem.
 
 Tarefa do usuário:
 """
@@ -470,7 +506,12 @@ Tipo de arquivo: ${fileType}
 Meta: pelo menos ${targetLines} linhas de código funcional no total, dividido em seções pequenas.
 
 Responda APENAS com um JSON neste formato exato:
-{"comando":"instrução clara e detalhada de implementação, resumindo o que o arquivo final deve fazer e como as seções se conectam","nomeArquivo":"nome-sugerido.${fileType}","secoes":[{"nome":"nome_curto_em_snake_case","descricao":"o que essa seção/função deve conter e fazer"}]}
+{
+  "comando": "instrução clara e detalhada de implementação, resumindo o que o arquivo final deve fazer e como as seções se conectam",
+  "nomeArquivo": "nome-sugerido.${fileType}",
+  "arquivoBase": "texto (não JSON aninhado, uma string só) listando: (1) todas as variáveis/estados globais compartilhados com seus nomes exatos e tipo/formato; (2) a assinatura de cada função ou entidade importante que mais de uma seção vai usar, no formato 'nomeFuncao(parametro1, parametro2) -> retorno — o que faz'; (3) convenções de nomenclatura (ex: camelCase, prefixos). Isso é o contrato que todas as seções devem seguir à risca para o arquivo final funcionar sem conflitos.",
+  "secoes": [{"nome":"nome_curto_em_snake_case","descricao":"o que essa seção/função deve conter e fazer, incluindo quais itens do arquivoBase ela implementa ou consome"}]
+}
 
 Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chegar perto da meta de linhas, mantendo coerência entre elas. Não escreva nada fora do JSON.`;
 
@@ -478,9 +519,15 @@ Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chega
       const plan = parseJsonLoose(planRaw);
       state.command = plan.comando || brief;
       state.fileNameSuggested = plan.nomeArquivo || `arquivo.${fileType}`;
+      state.baseFile = (plan.arquivoBase || '').trim();
       state.sections = (plan.secoes || []).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
       renderChips();
       log(`Plano recebido: ${state.sections.length} seções.`, {agentColor:AGENT_COLORS[planner.colorIdx], cls:'ok'});
+      if(state.baseFile){
+        document.getElementById('baseFilePanel').classList.remove('hidden');
+        document.getElementById('baseFileView').textContent = state.baseFile;
+        log('Arquivo base (contrato de nomes e assinaturas) gerado e será enviado a todos os agentes.', {cls:'hl'});
+      }
 
       // 2) GERAÇÃO POR SEÇÃO (com expansão até atingir a meta de linhas, ou infinita até "parar")
       const infiniteMode = document.getElementById('infiniteMode').checked;
@@ -493,7 +540,7 @@ Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chega
         if((!infiniteMode && totalLines >= targetLines) || state.stopRequested) break;
         round++;
         log(`Linhas até agora: ${totalLines}${infiniteMode ? '' : '/'+targetLines}. Pedindo mais seções ao planejador...`, {cls:'hl'});
-        const more = nextKey();
+        const more = nextKey('gen');
         // Envia só as últimas seções + a contagem total, não a lista inteira,
         // para manter o prompt pequeno mesmo com milhares de linhas já geradas (economia de tokens).
         const recentNames = state.sections.slice(-25).map(s => s.name).join(', ');
@@ -504,6 +551,7 @@ Crie quantas seções forem necessárias (podem ser muitas) para, somadas, chega
 """
 ${state.command}
 """
+${state.baseFile ? `Contrato/arquivo base já definido (novas seções devem respeitar esses nomes e assinaturas, ou propor extensões compatíveis com ele):\n"""\n${state.baseFile}\n"""\n` : ''}
 Total de seções já criadas: ${state.sections.length} (últimas: ${recentNames}).
 Linhas atuais: ${totalLines}. ${infiniteMode ? 'Modo infinito: continue propondo seções novas e úteis.' : `Meta: ${targetLines}.`}
 
@@ -559,7 +607,7 @@ Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
   }
 
   async function generateOneSection(sec, fileType, allNames){
-    const agent = nextKey();
+    const agent = nextKey('gen');
     if(!agent){ sec.status = 'error'; log('Nenhuma chave válida disponível.', {cls:'err'}); return; }
     log(`Gerando seção "${sec.name}"...`, {agentColor:AGENT_COLORS[agent.colorIdx]});
     const prompt = `Você é um agente de codificação colaborando com outros agentes para montar UM ÚNICO arquivo final, seção por seção.
@@ -568,7 +616,7 @@ Instrução geral do projeto:
 """
 ${state.command}
 """
-
+${state.baseFile ? `Contrato/arquivo base compartilhado por TODOS os agentes — use exatamente estes nomes de variáveis globais e estas assinaturas de função quando essa seção implementar ou chamar algo listado aqui (não invente nomes alternativos):\n"""\n${state.baseFile}\n"""\n` : ''}
 Todas as seções planejadas, em ordem: ${allNames}
 
 Gere APENAS o código da seção abaixo, em ${fileType}, compatível em estilo e nomes com as demais seções.
@@ -576,10 +624,14 @@ Gere APENAS o código da seção abaixo, em ${fileType}, compatível em estilo e
 Seção: "${sec.name}"
 Descrição: ${sec.description}
 
-Regras:
-- Responda SOMENTE com código, sem markdown, sem blocos \`\`\`, sem explicações antes ou depois.
-- Não repita código de outras seções.
-- Comentários dentro do código são bem-vindos quando ajudam a entender.`;
+Regras para a geração das funções desta seção:
+- Cada função com responsabilidade própria deve ser uma função nomeada e independente (não amontoe várias responsabilidades numa função só).
+- Se o nome/assinatura da função já está no contrato acima, implemente-o exatamente como descrito ali (mesmo nome, mesma ordem e sentido de parâmetros).
+- Se for uma função nova, dê um nome claro em ${fileType === 'py' ? 'snake_case' : 'camelCase'} que não colida com nomes já usados em outras seções, e não redeclare nada que já exista no contrato ou nas seções: ${allNames}.
+- Documente cada função com um comentário curto acima dizendo o que ela recebe e o que retorna.
+- Trate entradas inválidas ou casos de borda óbvios em vez de assumir que os dados sempre chegam corretos.
+- Não repita código de outras seções nem redefina uma função que outra seção já deve declarar.
+- Responda SOMENTE com código, sem markdown, sem blocos \`\`\`, sem explicações antes ou depois.`;
     try{
       const code = await callGemini(agent, prompt, {json:false, maxTokens:8192, temperature:0.4});
       sec.code = stripFences(code);
@@ -611,12 +663,21 @@ Regras:
     return t.trim();
   }
 
+  function commentLine(fileType, text){
+    if(fileType === 'html') return `<!-- ${text} -->`;
+    if(fileType === 'py') return `# ${text}`;
+    return `// ${text}`;
+  }
+
   function mergedCode(fileType){
     const cp = commentPrefix(fileType);
-    return state.sections
+    const body = state.sections
       .filter(s => s.code)
       .map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`)
       .join('\n\n');
+    if(!state.baseFile) return body;
+    const baseComment = state.baseFile.split('\n').map(l => commentLine(fileType, l)).join('\n');
+    return `${cp.open}arquivo_base_contrato${cp.close}\n${baseComment}\n\n${body}`;
   }
 
   function countLines(){
@@ -650,13 +711,13 @@ Regras:
   }
 
   async function verifyChunk(chunkSecs, fileType){
-    const verifier = nextKey();
+    const verifier = nextKey('verify');
     if(!verifier) return [];
     const cp = commentPrefix(fileType);
     const code = chunkSecs.map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`).join('\n\n');
     log(`Verificando lote com ${chunkSecs.length} seção(ões)...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
-    const prompt = `Você é o agente verificador. Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e procure erros de sintaxe, bugs lógicos, referências quebradas ou inconsistências dentro deste trecho.
-
+    const prompt = `Você é o agente verificador, dedicado a manter a qualidade do arquivo. Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e procure erros de sintaxe, bugs lógicos, referências quebradas ou inconsistências dentro deste trecho.
+${state.baseFile ? `Verifique também se o trecho respeita este contrato de nomes/assinaturas compartilhado entre os agentes; um nome ou assinatura de função diferente do contrato conta como problema:\n"""\n${state.baseFile}\n"""\n` : ''}
 As seções estão marcadas por comentários indicando o nome de cada uma.
 
 Trecho:
@@ -679,7 +740,7 @@ Se não houver problemas relevantes, responda {"temErros": false, "problemas": [
   }
 
   async function fixSection(sec, prob){
-    const fixer = nextKey();
+    const fixer = nextKey('verify');
     if(!fixer) return;
     log(`Corrigindo seção "${sec.name}"...`, {agentColor:AGENT_COLORS[fixer.colorIdx]});
     const fixPrompt = `Corrija a seção de código abaixo com base no problema identificado. Mantenha o mesmo propósito e compatibilidade com o restante do projeto.
@@ -688,7 +749,7 @@ Projeto:
 """
 ${state.command}
 """
-
+${state.baseFile ? `Contrato/arquivo base compartilhado (a correção precisa continuar respeitando estes nomes e assinaturas):\n"""\n${state.baseFile}\n"""\n` : ''}
 Seção: "${sec.name}"
 Código atual:
 """
