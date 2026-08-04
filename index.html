@@ -360,6 +360,17 @@ body{
   z-index:50;
 }
 #overlay.open{display:flex;}
+body.modal-open #main{pointer-events:none; filter:blur(1px) brightness(.85);}
+#key-help.visible{display:block !important;}
+#keys-input.invalid{border-color:var(--rust);}
+.error-note .fix-link{
+  display:inline-block;
+  margin-top:8px;
+  color:var(--amber);
+  cursor:pointer;
+  text-decoration:underline;
+  font-weight:600;
+}
 #modal{
   background:var(--panel);
   border:1px solid var(--line);
@@ -402,6 +413,7 @@ body{
   margin-bottom:16px;
 }
 #modal textarea{min-height:90px; resize:vertical;}
+#keys-input.masked{-webkit-text-security:disc; -moz-text-security:disc; text-security:disc;}
 #modal .row-actions{
   display:flex;
   justify-content:flex-end;
@@ -483,8 +495,9 @@ body{
   <div id="modal">
     <h2>Configurar chaves Gemini</h2>
     <p class="hint">Cole uma ou mais chaves (uma por linha ou separadas por vírgula). Elas ficam salvas só no seu navegador (localStorage) e são enviadas apenas para a API do Google. Se uma chave bater o limite de uso, o RELÊ roda automaticamente para a próxima.</p>
-    <label for="keys-input">Chaves da API</label>
-    <textarea id="keys-input" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."></textarea>
+    <label for="keys-input">Chaves da API <span id="toggle-mask" style="float:right;cursor:pointer;color:var(--amber);text-transform:none;letter-spacing:0;">👁 mostrar</span></label>
+    <textarea id="keys-input" class="masked" placeholder="AIzaSy...&#10;AIzaSy...&#10;AIzaSy..."></textarea>
+    <p class="hint" id="key-help" style="display:none;">Se der erro 401/403: confira se copiou a chave inteira (sem espaços/aspas), se ela é do <strong>Google AI Studio</strong> (aistudio.google.com/apikey) e se não tem restrição de "HTTP referrer" — chaves restritas bloqueiam chamadas feitas de um arquivo local.</p>
     <label for="model-select">Modelo</label>
     <select id="model-select">
       <option value="gemini-3.6-flash">gemini-3.6-flash (rápido, recomendado)</option>
@@ -575,66 +588,147 @@ loadConfig();
 
 // ---------- modal ----------
 const overlay = $('#overlay');
-$('#settings-btn').addEventListener('click', ()=>{
+function openSettings(showHelp){
   $('#keys-input').value = cfg.keys.join('\n');
   $('#model-select').value = cfg.model;
+  $('#keys-input').classList.add('masked');
+  $('#keys-input').classList.remove('invalid');
+  $('#toggle-mask').textContent = '👁 mostrar';
+  $('#key-help').classList.toggle('visible', !!showHelp);
   overlay.classList.add('open');
+  document.body.classList.add('modal-open');
+  // garante que o texto colado/digitado vá para o campo certo, não para o chat atrás do modal
+  requestAnimationFrame(()=>{
+    const ta = $('#keys-input');
+    ta.focus();
+    ta.select();
+  });
+}
+function closeSettings(){
+  overlay.classList.remove('open');
+  document.body.classList.remove('modal-open');
+}
+$('#settings-btn').addEventListener('click', ()=> openSettings(false));
+$('#toggle-mask').addEventListener('click', ()=>{
+  const ta = $('#keys-input');
+  const masked = ta.classList.toggle('masked');
+  $('#toggle-mask').textContent = masked ? '👁 mostrar' : '🙈 ocultar';
+  ta.focus();
 });
-$('#cancel-settings').addEventListener('click', ()=> overlay.classList.remove('open'));
-overlay.addEventListener('click', (e)=>{ if(e.target===overlay) overlay.classList.remove('open'); });
+$('#keys-input').addEventListener('focus', ()=>{ $('#key-help').classList.add('visible'); });
+$('#cancel-settings').addEventListener('click', closeSettings);
+overlay.addEventListener('click', (e)=>{ if(e.target===overlay) closeSettings(); });
+document.addEventListener('keydown', (e)=>{
+  if(e.key==='Escape' && overlay.classList.contains('open')) closeSettings();
+});
 $('#save-settings').addEventListener('click', ()=>{
   const raw = $('#keys-input').value;
-  const keys = raw.split(/[\n,]/).map(k=>k.trim()).filter(Boolean);
+  const keys = [...new Set(
+    raw.split(/[\n,]/)
+       .map(k=>k.trim().replace(/^['"]|['"]$/g,'').trim())
+       .filter(Boolean)
+  )];
+  const looksInvalid = keys.some(k => k.length < 10 || /\s/.test(k));
+  if(looksInvalid){
+    $('#keys-input').classList.add('invalid');
+    $('#key-help').classList.add('visible');
+    return;
+  }
   cfg.keys = keys;
   cfg.model = $('#model-select').value;
   keyPointer = 0;
   saveConfig();
-  overlay.classList.remove('open');
+  closeSettings();
 });
 if(!cfg.keys.length){
-  setTimeout(()=>{ $('#settings-btn').click(); }, 300);
+  setTimeout(()=>{ openSettings(false); }, 300);
 }
 
 // ---------- chamada ao Gemini com rotação de chaves ----------
+function friendlyApiError(status, bodyText){
+  let apiMsg = '';
+  try{ apiMsg = JSON.parse(bodyText)?.error?.message || ''; }catch(e){ apiMsg = (bodyText||'').slice(0,160); }
+  switch(status){
+    case 400:
+      return `pedido inválido (400) — normalmente é o nome do modelo ou o formato da requisição. Detalhe: ${apiMsg || 'sem detalhe'}`;
+    case 401:
+      return 'chave rejeitada (401) — a chave está errada, incompleta, ou não é uma chave do Google AI Studio (aistudio.google.com/apikey). Confira em "configurar chaves".';
+    case 403:
+      return 'acesso negado (403) — a chave existe mas não tem permissão para este modelo, ou tem restrição de referrer/IP que bloqueia chamadas locais.';
+    case 404:
+      return `modelo não encontrado (404) — "${cfg.model}" pode não existir mais ou não estar disponível para essa chave. Tente trocar o modelo em "configurar chaves".`;
+    case 429:
+      return 'limite de uso atingido (429) — a chave estourou a cota por agora.';
+    default:
+      return `erro na API (status ${status})${apiMsg ? ': '+apiMsg : ''}`;
+  }
+}
+
 async function geminiCall(contents, systemInstruction, maxOutputTokens){
-  if(!cfg.keys.length) throw new Error('Nenhuma chave configurada. Clique em "configurar chaves".');
+  if(!cfg.keys.length){
+    const e = new Error('Nenhuma chave configurada. Clique em "configurar chaves".');
+    e.isAuth = true;
+    throw e;
+  }
   let lastErr = null;
   for(let attempt=0; attempt<cfg.keys.length; attempt++){
     const idx = keyPointer % cfg.keys.length;
     const key = cfg.keys[idx];
     try{
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json','x-goog-api-key':key},
-        body: JSON.stringify({
-          contents: contents,
-          systemInstruction: systemInstruction ? {parts:[{text:systemInstruction}]} : undefined,
-          generationConfig: { maxOutputTokens: maxOutputTokens || 2048 }
-        })
-      });
-      if(res.status === 429 || res.status === 403){
-        lastErr = new Error(`chave ${idx+1} recusada (status ${res.status}) — tentando próxima`);
+      let res;
+      try{
+        res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-goog-api-key':key},
+          body: JSON.stringify({
+            contents: contents,
+            systemInstruction: systemInstruction ? {parts:[{text:systemInstruction}]} : undefined,
+            generationConfig: { maxOutputTokens: maxOutputTokens || 2048 }
+          })
+        });
+      }catch(networkErr){
+        lastErr = new Error('falha de conexão com a API do Google — verifique sua internet e tente de novo.');
+        keyPointer++;
+        continue;
+      }
+
+      if(res.status === 429){
+        lastErr = new Error(`chave ${idx+1} de ${cfg.keys.length}: ${friendlyApiError(429)}`);
+        keyPointer++;
+        continue;
+      }
+      if(res.status === 401 || res.status === 403){
+        const body = await res.text();
+        const e = new Error(`chave ${idx+1} de ${cfg.keys.length}: ${friendlyApiError(res.status, body)}`);
+        e.isAuth = true;
+        lastErr = e;
         keyPointer++;
         continue;
       }
       if(!res.ok){
         const body = await res.text();
-        throw new Error(`erro na API (status ${res.status}): ${body.slice(0,200)}`);
+        const e = new Error(friendlyApiError(res.status, body));
+        if(res.status === 400 || res.status === 404) throw e; // erro de configuração, não adianta trocar de chave
+        lastErr = e;
+        keyPointer++;
+        continue;
       }
       const data = await res.json();
       updateKeyIndicator();
       const parts = data?.candidates?.[0]?.content?.parts;
-      if(!parts) throw new Error('resposta vazia da API (talvez bloqueada por segurança)');
+      if(!parts){
+        const blockReason = data?.promptFeedback?.blockReason;
+        throw new Error(blockReason ? `resposta bloqueada por segurança (${blockReason})` : 'resposta vazia da API');
+      }
       return parts.map(p=>p.text||'').join('');
     }catch(err){
+      if(err.message && (err.message.startsWith('pedido inválido') || err.message.startsWith('modelo não encontrado'))) throw err;
       lastErr = err;
-      if(err.message && err.message.includes('recusada')){ continue; }
-      // erro de rede ou outro: tenta próxima chave também, mas registra
       keyPointer++;
       continue;
     }
   }
-  throw lastErr || new Error('todas as chaves falharam');
+  throw lastErr || new Error('todas as chaves configuradas falharam');
 }
 
 function toGeminiContents(hist, extraUserText){
@@ -644,41 +738,45 @@ function toGeminiContents(hist, extraUserText){
 }
 
 // ---------- pipeline ----------
+async function runStage(stageId, label, fn){
+  setStation(stageId,'active');
+  statusLine.textContent = `etapa ${STAGES.findIndex(s=>s.id===stageId)+1}/${STAGES.length} · ${label}...`;
+  try{
+    const result = await fn();
+    setStation(stageId,'done');
+    return result;
+  }catch(err){
+    setStation(stageId,'error');
+    err.failedStage = stageId;
+    throw err;
+  }
+}
+
 async function runPipeline(userText){
   const stageOutputs = {};
 
   // 1. planejar
-  setStation('plan','active');
   const planSys = `Você é a etapa de PLANEJAMENTO de um pipeline de resposta. Leia o pedido do usuário e o histórico da conversa. Escreva um plano curto (3 a 6 tópicos) do que a resposta final deve conter e em que ordem, sem escrever a resposta em si. Responda no mesmo idioma da mensagem do usuário. Seja direto, sem introduções.`;
-  const plan = await geminiCall(toGeminiContents(history, userText), planSys, 500);
+  const plan = await runStage('plan','planejando', ()=> geminiCall(toGeminiContents(history, userText), planSys, 500));
   stageOutputs.plan = plan;
-  setStation('plan','done');
 
   // 2. rascunhar
-  setStation('draft','active');
   const draftSys = `Você é a etapa de RASCUNHO de um pipeline de resposta. Use o plano abaixo e o histórico da conversa para escrever uma resposta completa e útil ao pedido do usuário. Pode usar blocos de código markdown (\`\`\`linguagem) quando fizer sentido. Responda no mesmo idioma da mensagem do usuário.\n\nPLANO:\n${plan}`;
-  const draft = await geminiCall(toGeminiContents(history, userText), draftSys, 2200);
+  const draft = await runStage('draft','rascunhando', ()=> geminiCall(toGeminiContents(history, userText), draftSys, 2200));
   stageOutputs.draft = draft;
-  setStation('draft','done');
 
   // 3. criticar
-  setStation('critic','active');
   const criticSys = `Você é a etapa de CRÍTICA de um pipeline de resposta. Seja um revisor exigente. Releia o pedido original do usuário e o rascunho abaixo. Aponte, em lista curta, o que está errado, incompleto, confuso ou que poderia melhorar. Se o rascunho já estiver muito bom, diga isso claramente e liste só ajustes finos. Não reescreva a resposta inteira, só a crítica. Responda no mesmo idioma da mensagem do usuário.\n\nPEDIDO DO USUÁRIO:\n${userText}\n\nRASCUNHO:\n${draft}`;
-  const critique = await geminiCall([{role:'user', parts:[{text:criticSys}]}], null, 500);
+  const critique = await runStage('critic','revisando', ()=> geminiCall([{role:'user', parts:[{text:criticSys}]}], null, 500));
   stageOutputs.critic = critique;
-  setStation('critic','done');
 
   // 4. refinar
-  setStation('refine','active');
   const refineSys = `Você é a etapa FINAL de um pipeline de resposta. Reescreva o rascunho incorporando a crítica, corrigindo o que for necessário. Entregue a resposta final, pronta para o usuário — sem falar sobre o processo, sem dizer "aqui está a versão revisada", apenas a resposta em si. Mantenha blocos de código markdown quando existirem. Responda no mesmo idioma da mensagem do usuário.\n\nPEDIDO DO USUÁRIO:\n${userText}\n\nRASCUNHO:\n${draft}\n\nCRÍTICA:\n${critique}`;
-  const final = await geminiCall([{role:'user', parts:[{text:refineSys}]}], null, 2600);
+  const final = await runStage('refine','refinando', ()=> geminiCall([{role:'user', parts:[{text:refineSys}]}], null, 2600));
   stageOutputs.refine = final;
-  setStation('refine','done');
 
   // 5. entregar
-  setStation('ship','active');
-  await new Promise(r=>setTimeout(r,150));
-  setStation('ship','done');
+  await runStage('ship','entregando', ()=> new Promise(r=>setTimeout(r,150)));
 
   return {final, stageOutputs};
 }
@@ -782,11 +880,22 @@ function addMessage(role, text, stageOutputs){
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-function addError(msg){
+function addError(msg, isAuth){
   emptyState.style.display = 'none';
   const wrap = document.createElement('div');
   wrap.className = 'msg assistant';
-  wrap.innerHTML = `<div class="error-note">⚠ ${escapeHtml(msg)}</div>`;
+  const note = document.createElement('div');
+  note.className = 'error-note';
+  note.innerHTML = `⚠ ${escapeHtml(msg)}`;
+  if(isAuth){
+    const link = document.createElement('span');
+    link.className = 'fix-link';
+    link.textContent = 'abrir configurar chaves →';
+    link.addEventListener('click', ()=> openSettings(true));
+    note.appendChild(document.createElement('br'));
+    note.appendChild(link);
+  }
+  wrap.appendChild(note);
   chatEl.appendChild(wrap);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
@@ -830,9 +939,8 @@ form.addEventListener('submit', async (e)=>{
     addMessage('assistant', final, stageOutputs);
     statusLine.textContent = 'pronto';
   }catch(err){
-    resetStations();
-    addError(err.message || 'falha desconhecida no pipeline');
-    statusLine.textContent = 'erro';
+    addError(err.message || 'falha desconhecida no pipeline', !!err.isAuth);
+    statusLine.textContent = err.failedStage ? `erro na etapa "${err.failedStage}"` : 'erro';
   }finally{
     busy = false; sendBtn.disabled = false;
     updateKeyIndicator();
