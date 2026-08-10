@@ -76,21 +76,21 @@
   /* ---- keys panel ---- */
   #keysList{display:flex; flex-direction:column; gap:8px; margin-bottom:12px;}
   .key-row{
-    display:grid; grid-template-columns:14px 1fr 1fr 148px auto; gap:10px; align-items:center;
+    display:grid; grid-template-columns:14px 1fr 108px 1fr 118px 148px auto; gap:10px; align-items:center;
     background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
   }
-  @media (max-width:720px){.key-row{grid-template-columns:14px 1fr auto; grid-template-areas:"sw label del" "empty key key" "empty role role"; row-gap:6px;}}
+  @media (max-width:900px){.key-row{grid-template-columns:14px 1fr auto; grid-template-areas:"sw label del" "empty prov prov" "empty key key" "empty model model" "empty role role"; row-gap:6px;}}
   .key-swatch{width:10px;height:10px;border-radius:50%;}
   .key-row input{
     background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:12.5px;
     outline:none; width:100%;
   }
   .key-row input::placeholder{color:var(--text-faint);}
-  .key-row select.role-select{
+  .key-row select.role-select, .key-row select.provider-select{
     background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:6px; color:var(--text-dim);
     font-family:var(--mono); font-size:11px; padding:5px 6px; outline:none; width:100%;
   }
-  .key-row select.role-select:focus{border-color:var(--cyan);}
+  .key-row select.role-select:focus, .key-row select.provider-select:focus{border-color:var(--cyan);}
   .key-row button{
     background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px;
   }
@@ -186,18 +186,20 @@
       <div class="dot"></div>
       <div>
         <h1>Sala de Controle</h1>
-        <div class="tag">orquestrador multi-agente · gemini api</div>
+        <div class="tag">orquestrador multi-agente · multi-provedor</div>
       </div>
     </div>
-    <p class="sub">Várias chaves da API Gemini trabalhando juntas: uma planeja, várias escrevem o arquivo em seções, uma ou mais revisam e corrigem, e no final tudo é unido em um único arquivo pronto para baixar.</p>
+    <p class="sub">Várias chaves de API — Gemini, OpenAI (ChatGPT), Anthropic (Claude) e xAI (Grok) — trabalhando juntas: uma planeja, várias escrevem o arquivo em seções, uma ou mais revisam e corrigem, e no final tudo é unido em um único arquivo pronto para baixar.</p>
   </header>
 
   <section class="panel">
-    <h2>01 · Chaves de API <span class="n">— adicione uma ou mais</span></h2>
+    <h2>01 · Chaves de API <span class="n">— adicione uma ou mais, de qualquer provedor</span></h2>
     <div id="keysList"></div>
     <button class="btn-add" id="addKeyBtn">+ adicionar chave</button>
     <div class="keys-note">
-      As chaves ficam apenas na memória desta aba (não são salvas) e são usadas para chamar <code>generativelanguage.googleapis.com</code> diretamente do seu navegador. Com 1 chave o pipeline roda sequencialmente; com várias, as seções são geradas em paralelo (uma planeja, várias escrevem seções ao mesmo tempo, outras revisam e corrigem juntas). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção até chegar perto da meta de linhas (sem ficar propondo seções novas depois disso), e a verificação final roda uma única vez, básica, só para pegar erros que realmente quebram o código — não fica revisando e corrigindo em loop. Trate suas chaves como senhas.
+      As chaves ficam apenas na memória desta aba (não são salvas) e cada uma é chamada diretamente do seu navegador na API do provedor escolhido (Gemini, OpenAI, Anthropic ou xAI/Grok). Misturar provedores ajuda a otimizar o uso de tokens: o orquestrador distribui as chamadas entre todas as chaves disponíveis (round-robin), então quanto mais chaves/provedores diferentes você adicionar, mais o trabalho roda em paralelo e menos cada conta individual é sobrecarregada — além de servir como fallback automático (se uma chave falhar ou ficar sem cota, o pipeline segue com as outras). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção até chegar perto da meta de linhas (sem ficar propondo seções novas depois disso), e a verificação final roda uma única vez, básica, só para pegar erros que realmente quebram o código — não fica revisando e corrigindo em loop. Trate suas chaves como senhas.
+      <br><br>
+      <strong>Nota sobre CORS:</strong> a API da OpenAI (e às vezes a da xAI) pode bloquear chamadas feitas diretamente do navegador por política de CORS, retornando erro de rede antes mesmo de chegar ao seu servidor. Se isso acontecer com uma chave OpenAI/xAI, o agente será marcado como "falha" e o orquestrador continua com as demais chaves. A Google (Gemini) e a Anthropic (com o cabeçalho de acesso direto do navegador) normalmente funcionam sem esse problema.
     </div>
   </section>
 
@@ -225,7 +227,7 @@
         <input type="number" id="targetLines" value="9000" min="50" step="100">
       </div>
       <div class="field">
-        <label>Modelo Gemini</label>
+        <label>Modelo Gemini padrão <span style="opacity:.6">(usado se a chave não tiver modelo próprio)</span></label>
         <select id="modelSelect">
           <option value="gemini-2.5-flash">gemini-2.5-flash (rápido)</option>
           <option value="gemini-2.5-pro">gemini-2.5-pro (mais capaz)</option>
@@ -297,9 +299,21 @@
 <script>
 (function(){
   const AGENT_COLORS = ['#4fd1c5','#f2b84b','#e8618c','#7ed957','#5b8def','#c792ea'];
+  const PROVIDER_DEFAULT_MODEL = {
+    gemini: 'gemini-2.5-flash',
+    openai: 'gpt-4o-mini',
+    anthropic: 'claude-sonnet-4-5',
+    xai: 'grok-4'
+  };
+  const PROVIDER_LABEL = {
+    gemini: 'Gemini',
+    openai: 'ChatGPT',
+    anthropic: 'Claude',
+    xai: 'Grok'
+  };
   let keyIdSeq = 0;
   const state = {
-    keys: [],        // {id, label, key, colorIdx, status, role}  role: 'both' | 'gen' | 'verify'
+    keys: [],        // {id, label, key, colorIdx, status, role, provider, model}
     running: false,
     stopRequested: false,
     genCursor: 0,
@@ -313,10 +327,10 @@
   // ---------- Keys UI ----------
   const keysList = document.getElementById('keysList');
 
-  function addKeyRow(label='', key='', role='both'){
+  function addKeyRow(label='', key='', role='both', provider='gemini', model=''){
     const id = 'k'+(keyIdSeq++);
     const colorIdx = state.keys.length % AGENT_COLORS.length;
-    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle', role});
+    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle', role, provider, model});
     renderKeys();
   }
 
@@ -328,7 +342,14 @@
       row.innerHTML = `
         <div class="key-swatch" style="background:${AGENT_COLORS[k.colorIdx]}"></div>
         <input type="text" data-field="label" placeholder="rótulo (ex: Planejador)" value="${escapeAttr(k.label)}">
-        <input type="password" data-field="key" placeholder="cole sua chave da API Gemini" value="${escapeAttr(k.key)}">
+        <select class="provider-select" data-field="provider" title="provedor desta chave">
+          <option value="gemini">Gemini</option>
+          <option value="openai">ChatGPT (OpenAI)</option>
+          <option value="anthropic">Claude (Anthropic)</option>
+          <option value="xai">Grok (xAI)</option>
+        </select>
+        <input type="password" data-field="key" placeholder="cole a chave de API deste provedor" value="${escapeAttr(k.key)}">
+        <input type="text" data-field="model" placeholder="modelo (opcional)" value="${escapeAttr(k.model)}">
         <select class="role-select" data-field="role" title="o que esta chave pode fazer no pipeline">
           <option value="both">geração + verificação</option>
           <option value="gen">só geração</option>
@@ -338,6 +359,15 @@
       `;
       row.querySelector('[data-field=label]').addEventListener('input', e => k.label = e.target.value);
       row.querySelector('[data-field=key]').addEventListener('input', e => k.key = e.target.value.trim());
+      row.querySelector('[data-field=model]').addEventListener('input', e => k.model = e.target.value.trim());
+      const providerSelect = row.querySelector('[data-field=provider]');
+      providerSelect.value = k.provider || 'gemini';
+      providerSelect.addEventListener('change', e => {
+        k.provider = e.target.value;
+        const modelInput = row.querySelector('[data-field=model]');
+        modelInput.placeholder = `modelo (padrão: ${PROVIDER_DEFAULT_MODEL[k.provider]})`;
+      });
+      providerSelect.dispatchEvent(new Event('change'));
       const roleSelect = row.querySelector('[data-field=role]');
       roleSelect.value = k.role || 'both';
       roleSelect.addEventListener('change', e => k.role = e.target.value);
@@ -352,7 +382,7 @@
   function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
 
   document.getElementById('addKeyBtn').addEventListener('click', () => addKeyRow());
-  addKeyRow('Agente 1');
+  addKeyRow('Agente 1', '', 'both', 'gemini');
 
   // ---------- Log ----------
   const logEl = document.getElementById('log');
@@ -387,9 +417,11 @@
     });
   }
 
-  // ---------- Gemini call ----------
+  // ---------- Multi-provider AI call ----------
   // Seleciona a próxima chave adequada para um papel ('gen' geração/planejamento ou 'verify' verificação/correção).
-  // Chaves marcadas com o papel exato têm prioridade; chaves "both" servem para qualquer papel;
+  // O rodízio inclui TODAS as chaves utilizáveis, independente do provedor — misturar Gemini/ChatGPT/Claude/Grok
+  // é justamente o que distribui a carga de tokens entre contas e provedores diferentes em vez de bater sempre
+  // na mesma API. Chaves marcadas com o papel exato têm prioridade; chaves "both" servem para qualquer papel;
   // se nenhuma chave dedicada estiver disponível, cai para qualquer chave utilizável (para não travar
   // o pipeline de quem só cadastrou uma chave).
   function nextKey(role='gen'){
@@ -404,8 +436,14 @@
     return k;
   }
 
-  async function callGemini(agentKey, prompt, {json=false, maxTokens=8192, temperature=0.45, retries=1} = {}){
-    const model = document.getElementById('modelSelect').value;
+  function modelFor(agentKey){
+    if(agentKey.model) return agentKey.model;
+    if(agentKey.provider === 'gemini') return document.getElementById('modelSelect').value;
+    return PROVIDER_DEFAULT_MODEL[agentKey.provider] || PROVIDER_DEFAULT_MODEL.gemini;
+  }
+
+  async function callGeminiProvider(agentKey, prompt, {json, maxTokens, temperature}){
+    const model = modelFor(agentKey);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const body = {
       contents: [{ role:'user', parts:[{text: prompt}] }],
@@ -415,22 +453,99 @@
         ...(json ? {responseMimeType:'application/json'} : {})
       }
     };
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'x-goog-api-key': agentKey.key},
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
+    const data = await res.json();
+    const text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts || [])
+      .map(p => p.text || '').join('');
+    return text;
+  }
+
+  async function callOpenAIProvider(agentKey, prompt, {json, maxTokens, temperature}){
+    const model = modelFor(agentKey);
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const body = {
+      model,
+      messages: [{role:'user', content: prompt}],
+      max_tokens: maxTokens,
+      temperature,
+      ...(json ? {response_format:{type:'json_object'}} : {})
+    };
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${agentKey.key}`},
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
+    const data = await res.json();
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  }
+
+  // Grok (xAI) usa uma API compatível com o formato da OpenAI.
+  async function callXaiProvider(agentKey, prompt, {json, maxTokens, temperature}){
+    const model = modelFor(agentKey);
+    const url = 'https://api.x.ai/v1/chat/completions';
+    const body = {
+      model,
+      messages: [{role:'user', content: prompt}],
+      max_tokens: maxTokens,
+      temperature,
+      ...(json ? {response_format:{type:'json_object'}} : {})
+    };
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${agentKey.key}`},
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
+    const data = await res.json();
+    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+  }
+
+  async function callAnthropicProvider(agentKey, prompt, {json, maxTokens, temperature}){
+    const model = modelFor(agentKey);
+    const url = 'https://api.anthropic.com/v1/messages';
+    const body = {
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      messages: [{role:'user', content: json ? `${prompt}\n\nResponda SOMENTE com JSON válido, sem markdown, sem texto fora do JSON.` : prompt}]
+    };
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': agentKey.key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
+    const data = await res.json();
+    return (data.content || []).map(b => b.text || '').join('');
+  }
+
+  // Roteador único: encaminha para a API do provedor certo com base em agentKey.provider,
+  // mantendo a mesma assinatura que o resto do pipeline já usa (chamava-se callGemini antes
+  // de suportar múltiplos provedores).
+  async function callAI(agentKey, prompt, {json=false, maxTokens=8192, temperature=0.45, retries=1} = {}){
     let lastErr = null;
     for(let attempt=0; attempt <= retries; attempt++){
       try{
-        const res = await fetch(url, {
-          method:'POST',
-          headers:{'Content-Type':'application/json', 'x-goog-api-key': agentKey.key},
-          body: JSON.stringify(body)
-        });
-        if(!res.ok){
-          const errText = await res.text();
-          throw new Error(`HTTP ${res.status}: ${errText.slice(0,200)}`);
+        let text;
+        switch(agentKey.provider){
+          case 'openai': text = await callOpenAIProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
+          case 'anthropic': text = await callAnthropicProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
+          case 'xai': text = await callXaiProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
+          case 'gemini':
+          default: text = await callGeminiProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
         }
-        const data = await res.json();
         agentKey.status = 'ok';
-        const text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts || [])
-          .map(p => p.text || '').join('');
         if(!text) throw new Error('resposta vazia do modelo (pode ter sido bloqueada)');
         return text;
       }catch(e){
@@ -473,7 +588,7 @@
 
     if(!brief){ alert('Descreva o que você quer que a IA construa.'); return; }
     const validKeys = state.keys.filter(k => k.key);
-    if(validKeys.length === 0){ alert('Adicione pelo menos uma chave de API Gemini válida.'); return; }
+    if(validKeys.length === 0){ alert('Adicione pelo menos uma chave de API válida (Gemini, OpenAI, Anthropic ou xAI).'); return; }
 
     state.running = true;
     state.stopRequested = false;
@@ -488,6 +603,10 @@
     startBtn.classList.add('hidden');
     stopBtn.classList.remove('hidden');
     setProgress(2, 'planejando o arquivo...');
+    const providerCounts = {};
+    validKeys.forEach(k => providerCounts[k.provider] = (providerCounts[k.provider]||0)+1);
+    const providerSummary = Object.entries(providerCounts).map(([p,n]) => `${PROVIDER_LABEL[p]||p} x${n}`).join(', ');
+    log(`Time de agentes: ${providerSummary}.`, {cls:'hl'});
     log('Enviando o pedido para o agente planejador...', {cls:'hl'});
 
     try{
@@ -515,14 +634,14 @@ Responda APENAS com um JSON neste formato exato:
 
 Planeje o número de seções e o tamanho aproximado de cada uma para que a SOMA fique perto da meta (~80-150 linhas por seção como referência) — não crie seções demais nem funções fora do que a tarefa pede, isso só gasta tokens à toa e aumenta a chance de bugs de integração. Só inclua funções que a tarefa do usuário realmente precisa. Não escreva nada fora do JSON.`;
 
-      const planRaw = await callGemini(planner, planPrompt, {json:true, maxTokens:4096, temperature:0.5});
+      const planRaw = await callAI(planner, planPrompt, {json:true, maxTokens:4096, temperature:0.5});
       const plan = parseJsonLoose(planRaw);
       state.command = plan.comando || brief;
       state.fileNameSuggested = plan.nomeArquivo || `arquivo.${fileType}`;
       state.baseFile = (plan.arquivoBase || '').trim();
       state.sections = (plan.secoes || []).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
       renderChips();
-      log(`Plano recebido: ${state.sections.length} seções.`, {agentColor:AGENT_COLORS[planner.colorIdx], cls:'ok'});
+      log(`Plano recebido (via ${PROVIDER_LABEL[planner.provider]||planner.provider}): ${state.sections.length} seções.`, {agentColor:AGENT_COLORS[planner.colorIdx], cls:'ok'});
       if(state.baseFile){
         document.getElementById('baseFilePanel').classList.remove('hidden');
         document.getElementById('baseFileView').textContent = state.baseFile;
@@ -566,7 +685,7 @@ Linhas atuais: ${totalLines}. ${infiniteMode ? 'Modo infinito: continue propondo
 Proponha ${suggestedCount} seções NOVAS (funções, módulos, casos extras, testes, tratamento de erros, estilos, documentação, etc), sem repetir as existentes, para aproximar o arquivo da meta.
 Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
         try{
-          const moreRaw = await callGemini(more, morePrompt, {json:true, maxTokens:2048, temperature:0.6});
+          const moreRaw = await callAI(more, morePrompt, {json:true, maxTokens:2048, temperature:0.6});
           const moreParsed = parseJsonLoose(moreRaw);
           const newOnes = (moreParsed.secoes||[]).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
           if(newOnes.length === 0){
@@ -615,8 +734,8 @@ Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
   async function generateOneSection(sec, fileType, allNames){
     const agent = nextKey('gen');
     if(!agent){ sec.status = 'error'; log('Nenhuma chave válida disponível.', {cls:'err'}); return; }
-    log(`Gerando seção "${sec.name}"...`, {agentColor:AGENT_COLORS[agent.colorIdx]});
-    const prompt = `Você é um agente de codificação colaborando com outros agentes para montar UM ÚNICO arquivo final, seção por seção.
+    log(`Gerando seção "${sec.name}" (via ${PROVIDER_LABEL[agent.provider]||agent.provider})...`, {agentColor:AGENT_COLORS[agent.colorIdx]});
+    const prompt = `Você é um agente de codificação colaborando com outros agentes (possivelmente de provedores de IA diferentes) para montar UM ÚNICO arquivo final, seção por seção.
 
 Instrução geral do projeto:
 """
@@ -642,7 +761,7 @@ Regras para a geração das funções desta seção:
       // Limita o orçamento de tokens da seção à sua "fatia justa" da meta de linhas,
       // em vez de sempre pedir o máximo — evita seções infladas que estouram o alvo.
       const maxTokens = sectionTokenBudget();
-      const code = await callGemini(agent, prompt, {json:false, maxTokens, temperature:0.4});
+      const code = await callAI(agent, prompt, {json:false, maxTokens, temperature:0.4});
       sec.code = stripFences(code);
       sec.status = 'done';
     }catch(e){
@@ -662,8 +781,8 @@ Regras para a geração das funções desta seção:
     return Math.max(1024, Math.min(8192, tokens));
   }
 
-  // Gera as seções pendentes em lotes paralelos — várias chaves/agentes trabalham
-  // ao mesmo tempo em seções diferentes, em vez de uma de cada vez.
+  // Gera as seções pendentes em lotes paralelos — várias chaves/agentes (de qualquer provedor)
+  // trabalham ao mesmo tempo em seções diferentes, em vez de uma de cada vez.
   async function generatePendingSections(fileType){
     const allNames = state.sections.map(s => s.name).join(', ');
     const concurrency = Math.max(1, parseInt(document.getElementById('concurrencySelect').value, 10) || 1);
@@ -734,7 +853,7 @@ Regras para a geração das funções desta seção:
     if(!verifier) return [];
     const cp = commentPrefix(fileType);
     const code = chunkSecs.map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`).join('\n\n');
-    log(`Verificando lote com ${chunkSecs.length} seção(ões)...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
+    log(`Verificando lote com ${chunkSecs.length} seção(ões) (via ${PROVIDER_LABEL[verifier.provider]||verifier.provider})...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
     const prompt = `Você é o agente verificador. Esta é a única passada de revisão deste arquivo (revisão básica, não precisa ser exaustiva). Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e aponte SOMENTE problemas que realmente quebram o código: erro de sintaxe, função/variável usada mas nunca definida, chamada com assinatura errada, ou referência quebrada.
 Ignore preferências de estilo, otimizações ou coisas que "poderiam ser melhores" — só reporte o que de fato impede o código de funcionar.
 ${state.baseFile ? `Verifique também se o trecho respeita este contrato de nomes/assinaturas compartilhado entre os agentes; um nome ou assinatura de função diferente do contrato conta como problema:\n"""\n${state.baseFile}\n"""\n` : ''}
@@ -750,7 +869,7 @@ Responda apenas com JSON:
 
 Se não houver problemas relevantes, responda {"temErros": false, "problemas": []}.`;
     try{
-      const raw = await callGemini(verifier, prompt, {json:true, maxTokens:3072, temperature:0.2});
+      const raw = await callAI(verifier, prompt, {json:true, maxTokens:3072, temperature:0.2});
       const result = parseJsonLoose(raw);
       return (result.temErros && result.problemas) ? result.problemas : [];
     }catch(e){
@@ -762,7 +881,7 @@ Se não houver problemas relevantes, responda {"temErros": false, "problemas": [
   async function fixSection(sec, prob){
     const fixer = nextKey('verify');
     if(!fixer) return;
-    log(`Corrigindo seção "${sec.name}"...`, {agentColor:AGENT_COLORS[fixer.colorIdx]});
+    log(`Corrigindo seção "${sec.name}" (via ${PROVIDER_LABEL[fixer.provider]||fixer.provider})...`, {agentColor:AGENT_COLORS[fixer.colorIdx]});
     const fixPrompt = `Corrija a seção de código abaixo com base no problema identificado. Mantenha o mesmo propósito e compatibilidade com o restante do projeto.
 
 Projeto:
@@ -781,7 +900,7 @@ Sugestão de correção: ${prob.sugestaoDeCorrecao}
 
 Responda SOMENTE com o código corrigido e completo dessa seção, sem markdown, sem explicações.`;
     try{
-      const fixed = await callGemini(fixer, fixPrompt, {json:false, maxTokens:8192, temperature:0.3});
+      const fixed = await callAI(fixer, fixPrompt, {json:false, maxTokens:8192, temperature:0.3});
       sec.code = stripFences(fixed);
     }catch(e){
       log(`Não foi possível corrigir "${sec.name}": ${e.message}`, {cls:'err'});
