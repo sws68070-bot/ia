@@ -1,996 +1,728 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sala de Controle — Orquestrador Multi-Gemini</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>RASTREADOR // MÃO</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0a0c10;
-    --bg-grid:#0d1017;
-    --panel:#12151c;
-    --panel-2:#161a23;
-    --border:#232838;
-    --text:#e7eaf2;
-    --text-dim:#8a92a6;
-    --text-faint:#565e72;
-    --cyan:#4fd1c5;
-    --amber:#f2b84b;
-    --magenta:#e8618c;
-    --green:#7ed957;
-    --blue:#5b8def;
-    --violet:#c792ea;
-    --red:#ef5b5b;
-    --mono:'JetBrains Mono', ui-monospace, monospace;
-    --sans:'Space Grotesk', system-ui, sans-serif;
-    --radius:12px;
+    --bg:#05080c;
+    --bg2:#0b131c;
+    --panel:rgba(14,22,30,.72);
+    --panel-border:rgba(53,242,224,.16);
+    --cyan:#35f2e0;
+    --violet:#7c5cff;
+    --pink:#ff5c8a;
+    --text:#d6ecf7;
+    --text-dim:#5f7c8f;
+    --warn:#ffb454;
+    --radius:14px;
   }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{
+    width:100%; height:100%; background:var(--bg); color:var(--text);
+    font-family:'Inter',sans-serif; overflow:hidden;
+  }
   body{
     background:
-      radial-gradient(1200px 500px at 10% -10%, #142033 0%, transparent 60%),
-      radial-gradient(900px 500px at 100% 0%, #1c1430 0%, transparent 55%),
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(124,92,255,.14), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 100% 100%, rgba(53,242,224,.08), transparent 60%),
       var(--bg);
+  }
+  .mono{ font-family:'JetBrains Mono',monospace; }
+  .display{ font-family:'Chakra Petch',sans-serif; }
+
+  /* ---------- layout ---------- */
+  #app{
+    height:100vh; height:100dvh; width:100vw;
+    display:flex; flex-direction:column;
+    padding:14px;
+    gap:12px;
+  }
+  header{
+    display:flex; align-items:center; justify-content:space-between;
+    flex-shrink:0;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .glyph{
+    width:30px; height:30px; position:relative; flex-shrink:0;
+  }
+  .brand .glyph svg{ width:100%; height:100%; }
+  .brand h1{
+    font-size:15px; letter-spacing:.14em; font-weight:600;
     color:var(--text);
-    font-family:var(--sans);
-    min-height:100vh;
-    background-attachment:fixed;
   }
-  body::before{
-    content:"";
-    position:fixed; inset:0;
-    background-image:
-      linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
-    background-size:36px 36px;
+  .brand h1 span{ color:var(--cyan); }
+  .brand .sub{ font-size:9px; letter-spacing:.2em; color:var(--text-dim); margin-top:1px;}
+
+  .status-pill{
+    display:flex; align-items:center; gap:7px;
+    font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:.08em;
+    padding:6px 12px; border-radius:20px;
+    background:var(--panel); border:1px solid var(--panel-border);
+    color:var(--text-dim);
+  }
+  .status-pill .dot{
+    width:7px; height:7px; border-radius:50%; background:#3a4a55;
+    transition:.25s;
+  }
+  .status-pill.live .dot{ background:var(--cyan); box-shadow:0 0 8px var(--cyan); animation:pulse 1.4s infinite; }
+  .status-pill.live{ color:var(--cyan); border-color:rgba(53,242,224,.35); }
+  @keyframes pulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+  main{
+    flex:1; min-height:0;
+    display:grid;
+    grid-template-columns:1fr 300px;
+    gap:12px;
+  }
+  @media (max-width:820px){
+    main{ grid-template-columns:1fr; grid-template-rows:1fr auto; }
+    #panel{ max-height:40vh; overflow-y:auto; }
+  }
+
+  /* ---------- scanner / video ---------- */
+  #scanner{
+    position:relative; border-radius:var(--radius); overflow:hidden;
+    background:#000;
+    border:1px solid var(--panel-border);
+    box-shadow:0 0 0 1px rgba(0,0,0,.4), 0 20px 60px -20px rgba(53,242,224,.15) inset;
+    display:flex; align-items:center; justify-content:center;
+  }
+  #video, #overlay{
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    object-fit:cover;
+  }
+  #video{ filter:saturate(.85) contrast(1.05) brightness(.95); }
+  #video.mirror{ transform:scaleX(-1); }
+
+  /* corner brackets */
+  .bracket{ position:absolute; width:26px; height:26px; pointer-events:none; z-index:5; }
+  .bracket::before, .bracket::after{ content:''; position:absolute; background:var(--cyan); box-shadow:0 0 6px var(--cyan); }
+  .bracket.tl{ top:14px; left:14px; }
+  .bracket.tr{ top:14px; right:14px; transform:scaleX(-1); }
+  .bracket.bl{ bottom:14px; left:14px; transform:scaleY(-1); }
+  .bracket.br{ bottom:14px; right:14px; transform:scale(-1,-1); }
+  .bracket::before{ width:100%; height:2px; top:0; left:0; }
+  .bracket::after{ width:2px; height:100%; top:0; left:0; }
+
+  .scanline{
+    position:absolute; left:0; right:0; height:120px; z-index:4;
+    background:linear-gradient(to bottom, transparent, rgba(53,242,224,.16), transparent);
+    animation:scan 3.2s ease-in-out infinite;
     pointer-events:none;
-    z-index:0;
   }
-  .app{position:relative; z-index:1; max-width:1180px; margin:0 auto; padding:32px 20px 80px;}
+  @keyframes scan{
+    0%{ top:-10%; } 50%{ top:100%; } 50.01%{ top:-10%; } 100%{ top:-10%; }
+  }
 
-  header.top{display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:28px; flex-wrap:wrap;}
-  .brand{display:flex; align-items:center; gap:12px;}
-  .brand .dot{width:10px;height:10px;border-radius:50%; background:var(--cyan); box-shadow:0 0 14px var(--cyan); animation:pulse 2s infinite;}
-  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.35;}}
-  .brand h1{font-size:20px; margin:0; letter-spacing:.2px; font-weight:600;}
-  .brand .tag{font-family:var(--mono); font-size:11px; color:var(--text-faint); letter-spacing:1.5px; text-transform:uppercase;}
-  header.top p.sub{margin:0; color:var(--text-dim); font-size:13px; max-width:420px;}
+  #hud-readout{
+    position:absolute; bottom:14px; left:14px; z-index:6;
+    font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--cyan);
+    letter-spacing:.05em; text-shadow:0 0 8px rgba(53,242,224,.5);
+    display:flex; flex-direction:column; gap:2px;
+    opacity:.85;
+  }
+  #fps-badge{
+    position:absolute; top:14px; right:14px; z-index:6;
+    font-family:'JetBrains Mono',monospace; font-size:10px;
+    background:rgba(5,8,12,.55); border:1px solid var(--panel-border);
+    padding:4px 9px; border-radius:6px; color:var(--text-dim);
+  }
+  #fps-badge b{ color:var(--cyan); font-weight:700; }
 
-  .panel{
-    background:linear-gradient(180deg, var(--panel), var(--panel-2));
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:20px;
-    margin-bottom:18px;
-    box-shadow:0 1px 0 rgba(255,255,255,0.02) inset, 0 20px 40px -30px rgba(0,0,0,0.6);
+  #gesture-tag{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-40%);
+    z-index:7; pointer-events:none;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    opacity:0; transition:opacity .18s, transform .18s;
   }
-  .panel h2{
-    font-size:12px; text-transform:uppercase; letter-spacing:1.6px; font-weight:600;
-    color:var(--text-dim); margin:0 0 14px 0; display:flex; align-items:center; gap:8px;
+  #gesture-tag.show{ opacity:1; transform:translate(-50%,-55%); }
+  #gesture-tag .emoji{ font-size:54px; filter:drop-shadow(0 0 14px rgba(53,242,224,.5)); }
+  #gesture-tag .label{
+    font-family:'Chakra Petch',sans-serif; font-size:13px; letter-spacing:.12em;
+    color:var(--cyan); background:rgba(5,8,12,.6); padding:3px 10px; border-radius:20px;
+    border:1px solid rgba(53,242,224,.3);
   }
-  .panel h2 .n{font-family:var(--mono); color:var(--text-faint); font-size:11px;}
 
-  /* ---- keys panel ---- */
-  #keysList{display:flex; flex-direction:column; gap:8px; margin-bottom:12px;}
-  .key-row{
-    display:grid; grid-template-columns:14px 1fr 108px 1fr 118px 148px auto; gap:10px; align-items:center;
-    background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:8px 10px;
+  #empty-state{
+    position:absolute; inset:0; z-index:8;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+    background:radial-gradient(circle at 50% 50%, rgba(11,19,28,.4), rgba(5,8,12,.92));
+    text-align:center; padding:20px;
   }
-  @media (max-width:900px){.key-row{grid-template-columns:14px 1fr auto; grid-template-areas:"sw label del" "empty prov prov" "empty key key" "empty model model" "empty role role"; row-gap:6px;}}
-  .key-swatch{width:10px;height:10px;border-radius:50%;}
-  .key-row input{
-    background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:12.5px;
-    outline:none; width:100%;
+  #empty-state.hidden{ display:none; }
+  #empty-state .ico{ width:56px; height:56px; opacity:.8; }
+  #empty-state h2{ font-family:'Chakra Petch',sans-serif; font-size:16px; letter-spacing:.08em; }
+  #empty-state p{ font-size:12.5px; color:var(--text-dim); max-width:320px; line-height:1.5; }
+  #start-btn{
+    margin-top:6px; padding:11px 26px; border-radius:30px; border:1px solid var(--cyan);
+    background:rgba(53,242,224,.08); color:var(--cyan); font-family:'Chakra Petch',sans-serif;
+    font-size:13px; letter-spacing:.1em; cursor:pointer; transition:.2s;
   }
-  .key-row input::placeholder{color:var(--text-faint);}
-  .key-row select.role-select, .key-row select.provider-select{
-    background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:6px; color:var(--text-dim);
-    font-family:var(--mono); font-size:11px; padding:5px 6px; outline:none; width:100%;
-  }
-  .key-row select.role-select:focus, .key-row select.provider-select:focus{border-color:var(--cyan);}
-  .key-row button{
-    background:none; border:none; color:var(--text-faint); cursor:pointer; font-size:16px; line-height:1; padding:2px 6px;
-  }
-  .key-row button:hover{color:var(--red);}
-  .key-status{font-family:var(--mono); font-size:10px; padding:2px 6px; border-radius:4px; white-space:nowrap;}
-  .key-status.ok{color:var(--green); background:rgba(126,217,87,.1);}
-  .key-status.bad{color:var(--red); background:rgba(239,91,91,.1);}
-  .key-status.idle{color:var(--text-faint); background:rgba(255,255,255,.04);}
+  #start-btn:hover{ background:rgba(53,242,224,.18); box-shadow:0 0 20px rgba(53,242,224,.25); }
+  #start-btn:disabled{ opacity:.5; cursor:default; }
 
-  .btn-add{
-    background:transparent; border:1px dashed var(--border); color:var(--text-dim);
-    font-family:var(--mono); font-size:12px; padding:8px 12px; border-radius:8px; cursor:pointer; width:100%;
+  /* ---------- side panel ---------- */
+  #panel{
+    background:var(--panel); border:1px solid var(--panel-border); border-radius:var(--radius);
+    backdrop-filter:blur(14px);
+    padding:16px; display:flex; flex-direction:column; gap:18px;
+    overflow-y:auto;
   }
-  .btn-add:hover{border-color:var(--cyan); color:var(--cyan);}
-  .keys-note{font-size:11.5px; color:var(--text-faint); margin-top:10px; line-height:1.5;}
+  .section-title{
+    font-family:'Chakra Petch',sans-serif; font-size:10.5px; letter-spacing:.16em;
+    color:var(--text-dim); display:flex; align-items:center; gap:8px;
+    margin-bottom:2px;
+  }
+  .section-title::after{ content:''; flex:1; height:1px; background:linear-gradient(to right, var(--panel-border), transparent); }
 
-  /* ---- brief panel ---- */
-  .field{margin-bottom:14px;}
-  .field label{display:block; font-size:11.5px; color:var(--text-dim); margin-bottom:6px; font-family:var(--mono); letter-spacing:.3px;}
-  .field textarea, .field input[type=text], .field input[type=number], .field select{
-    width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:8px;
-    color:var(--text); padding:10px 12px; font-family:var(--sans); font-size:13.5px; outline:none;
-    transition:border-color .15s;
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .stat-box{
+    background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05);
+    border-radius:9px; padding:9px 10px;
   }
-  .field textarea{min-height:90px; resize:vertical; font-family:var(--mono); font-size:12.5px; line-height:1.5;}
-  .field textarea:focus, .field input:focus, .field select:focus{border-color:var(--cyan);}
-  .row{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
-  @media (max-width:720px){.row{grid-template-columns:1fr;}}
+  .stat-box .k{ font-size:9px; letter-spacing:.08em; color:var(--text-dim); text-transform:uppercase; }
+  .stat-box .v{ font-family:'JetBrains Mono',monospace; font-size:16px; color:var(--text); margin-top:3px; }
+  .stat-box .v.accent{ color:var(--cyan); }
+  .stat-box .v.violet{ color:var(--violet); }
 
-  /* ---- controls ---- */
-  .controls{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
-  .btn{
-    font-family:var(--mono); font-size:12.5px; letter-spacing:.4px; padding:11px 20px; border-radius:8px;
-    border:1px solid transparent; cursor:pointer; text-transform:uppercase; font-weight:600;
+  .hand-card{
+    background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05);
+    border-radius:9px; padding:10px 11px; display:flex; flex-direction:column; gap:6px;
   }
-  .btn-primary{background:var(--cyan); color:#03211f;}
-  .btn-primary:hover{filter:brightness(1.08);}
-  .btn-primary:disabled{opacity:.4; cursor:not-allowed;}
-  .btn-stop{background:transparent; border-color:var(--red); color:var(--red);}
-  .btn-stop:hover{background:rgba(239,91,91,.08);}
-  .btn-ghost{background:transparent; border-color:var(--border); color:var(--text-dim);}
-  .btn-ghost:hover{border-color:var(--text-dim); color:var(--text);}
+  .hand-card .row1{ display:flex; justify-content:space-between; align-items:center; }
+  .hand-card .side{ font-family:'Chakra Petch',sans-serif; font-size:12px; letter-spacing:.06em; }
+  .hand-card .conf{ font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-dim); }
+  .bar{ height:4px; border-radius:3px; background:rgba(255,255,255,.06); overflow:hidden; }
+  .bar i{ display:block; height:100%; background:linear-gradient(to right, var(--violet), var(--cyan)); border-radius:3px; transition:width .15s; }
+  .fingers-row{ display:flex; gap:4px; margin-top:2px; }
+  .finger-dot{ flex:1; height:5px; border-radius:3px; background:rgba(255,255,255,.08); }
+  .finger-dot.on{ background:var(--cyan); box-shadow:0 0 5px var(--cyan); }
 
-  .progress-wrap{flex:1; min-width:180px;}
-  .progress-bar{height:6px; border-radius:4px; background:rgba(255,255,255,0.06); overflow:hidden;}
-  .progress-fill{height:100%; width:0%; background:linear-gradient(90deg, var(--cyan), var(--blue)); transition:width .3s;}
-  .progress-label{font-family:var(--mono); font-size:11px; color:var(--text-faint); margin-top:6px;}
+  .control{ display:flex; flex-direction:column; gap:6px; }
+  .control .lbl{ display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); }
+  .control .lbl b{ color:var(--text); font-weight:500; font-family:'JetBrains Mono',monospace; font-size:10.5px; }
+  input[type=range]{
+    -webkit-appearance:none; width:100%; height:3px; border-radius:3px;
+    background:rgba(255,255,255,.1); outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:13px; height:13px; border-radius:50%;
+    background:var(--cyan); cursor:pointer; box-shadow:0 0 8px rgba(53,242,224,.6);
+    border:2px solid #05080c;
+  }
 
-  /* ---- log ---- */
-  #log{
-    height:260px; overflow-y:auto; font-family:var(--mono); font-size:12px; line-height:1.7;
-    background:#080a0e; border:1px solid var(--border); border-radius:8px; padding:12px 14px;
-  }
-  .log-line{display:flex; gap:8px; margin-bottom:2px;}
-  .log-time{color:var(--text-faint); flex-shrink:0;}
-  .log-badge{flex-shrink:0; padding:0 6px; border-radius:4px; font-size:10.5px; font-weight:600;}
-  .log-msg{color:var(--text-dim);}
-  .log-msg.ok{color:var(--green);}
-  .log-msg.err{color:var(--red);}
-  .log-msg.hl{color:var(--text);}
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; }
+  .toggle-row .lbl{ font-size:12px; color:var(--text); }
+  .switch{ width:36px; height:20px; border-radius:20px; background:rgba(255,255,255,.1); position:relative; cursor:pointer; transition:.2s; flex-shrink:0; }
+  .switch::after{ content:''; position:absolute; width:16px; height:16px; border-radius:50%; background:#8a9ba8; top:2px; left:2px; transition:.2s; }
+  .switch.on{ background:rgba(53,242,224,.25); }
+  .switch.on::after{ background:var(--cyan); left:18px; box-shadow:0 0 6px var(--cyan); }
 
-  /* ---- output ---- */
-  .output-tabs{display:flex; gap:6px; margin-bottom:12px;}
-  .tab-btn{
-    background:transparent; border:1px solid var(--border); color:var(--text-faint);
-    font-family:var(--mono); font-size:11px; padding:6px 12px; border-radius:6px; cursor:pointer;
+  .seg{ display:flex; gap:6px; }
+  .seg button{
+    flex:1; padding:7px 4px; border-radius:7px; border:1px solid var(--panel-border);
+    background:transparent; color:var(--text-dim); font-size:10.5px; font-family:'JetBrains Mono',monospace;
+    cursor:pointer; transition:.15s;
   }
-  .tab-btn.active{border-color:var(--cyan); color:var(--cyan);}
-  #codeView{
-    max-height:420px; overflow:auto; background:#080a0e; border:1px solid var(--border); border-radius:8px;
-    padding:14px; font-family:var(--mono); font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word;
-    color:#c9d1e0;
-  }
-  #previewFrame{width:100%; height:420px; border:1px solid var(--border); border-radius:8px; background:#fff;}
-  .output-actions{display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;}
-  .output-meta{font-family:var(--mono); font-size:11px; color:var(--text-faint);}
-  .hidden{display:none !important;}
+  .seg button.active{ background:rgba(53,242,224,.12); color:var(--cyan); border-color:rgba(53,242,224,.4); }
 
-  .section-chip{
-    display:inline-flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10.5px;
-    padding:3px 8px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); margin:3px 4px 0 0;
+  #snap-btn{
+    width:100%; padding:11px; border-radius:9px; border:1px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.03); color:var(--text); font-family:'Chakra Petch',sans-serif;
+    font-size:12.5px; letter-spacing:.08em; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+    transition:.15s;
   }
-  .section-chip .sw{width:6px;height:6px;border-radius:50%;}
-  .section-chip.done{border-color:rgba(126,217,87,.4); color:var(--green);}
-  .section-chip.err{border-color:rgba(239,91,91,.4); color:var(--red);}
+  #snap-btn:hover{ background:rgba(255,255,255,.07); border-color:rgba(53,242,224,.3); color:var(--cyan); }
+
+  footer{
+    flex-shrink:0; text-align:center; font-size:9.5px; letter-spacing:.1em; color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace; opacity:.6;
+  }
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.1); border-radius:3px; }
 </style>
 </head>
 <body>
-<div class="app">
 
-  <header class="top">
+<div id="app">
+
+  <header>
     <div class="brand">
-      <div class="dot"></div>
+      <div class="glyph">
+        <svg viewBox="0 0 40 40" fill="none">
+          <circle cx="20" cy="20" r="18" stroke="#35f2e0" stroke-opacity="0.35" stroke-width="1"/>
+          <path d="M20 8 L20 20 L28 24" stroke="#35f2e0" stroke-width="1.4" stroke-linecap="round"/>
+          <circle cx="20" cy="20" r="2.3" fill="#35f2e0"/>
+        </svg>
+      </div>
       <div>
-        <h1>Sala de Controle</h1>
-        <div class="tag">orquestrador multi-agente · multi-provedor</div>
+        <h1 class="display">RASTREADOR<span>://</span>MÃO</h1>
+        <div class="sub mono">HAND LANDMARK ENGINE · v1.0</div>
       </div>
     </div>
-    <p class="sub">Várias chaves de API — Gemini, OpenAI (ChatGPT), Anthropic (Claude) e xAI (Grok) — trabalhando juntas: uma planeja, várias escrevem o arquivo em seções, uma ou mais revisam e corrigem, e no final tudo é unido em um único arquivo pronto para baixar.</p>
+    <div class="status-pill" id="status-pill">
+      <div class="dot"></div>
+      <span id="status-text">AGUARDANDO</span>
+    </div>
   </header>
 
-  <section class="panel">
-    <h2>01 · Chaves de API <span class="n">— adicione uma ou mais, de qualquer provedor</span></h2>
-    <div id="keysList"></div>
-    <button class="btn-add" id="addKeyBtn">+ adicionar chave</button>
-    <div class="keys-note">
-      As chaves ficam apenas na memória desta aba (não são salvas) e cada uma é chamada diretamente do seu navegador na API do provedor escolhido (Gemini, OpenAI, Anthropic ou xAI/Grok). Misturar provedores ajuda a otimizar o uso de tokens: o orquestrador distribui as chamadas entre todas as chaves disponíveis (round-robin), então quanto mais chaves/provedores diferentes você adicionar, mais o trabalho roda em paralelo e menos cada conta individual é sobrecarregada — além de servir como fallback automático (se uma chave falhar ou ficar sem cota, o pipeline segue com as outras). Cada chave tem um <strong>papel</strong>: "geração + verificação" entra no rodízio dos dois tipos de tarefa; "só geração" nunca é chamada para revisar; "só verificação" fica reservada para revisar/corrigir e não escreve seções — útil para dedicar uma chave inteira a manter a qualidade do arquivo enquanto as outras produzem código. O arquivo cresce seção por seção até chegar perto da meta de linhas (sem ficar propondo seções novas depois disso), e a verificação final roda uma única vez, básica, só para pegar erros que realmente quebram o código — não fica revisando e corrigindo em loop. Trate suas chaves como senhas.
-      <br><br>
-      <strong>Nota sobre CORS:</strong> a API da OpenAI (e às vezes a da xAI) pode bloquear chamadas feitas diretamente do navegador por política de CORS, retornando erro de rede antes mesmo de chegar ao seu servidor. Se isso acontecer com uma chave OpenAI/xAI, o agente será marcado como "falha" e o orquestrador continua com as demais chaves. A Google (Gemini) e a Anthropic (com o cabeçalho de acesso direto do navegador) normalmente funcionam sem esse problema.
-    </div>
-  </section>
+  <main>
+    <div id="scanner">
+      <video id="video" class="mirror" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
 
-  <section class="panel">
-    <h2>02 · O que construir</h2>
-    <div class="field">
-      <label>Descreva o arquivo / app que a IA deve criar</label>
-      <textarea id="briefInput" placeholder="Ex: um jogo da velha completo em HTML/JS com IA para jogar sozinho, painel de placar e animações..."></textarea>
-    </div>
-    <div class="row">
-      <div class="field">
-        <label>Tipo de arquivo</label>
-        <select id="fileTypeSelect">
-          <option value="html">html (site/app)</option>
-          <option value="js">js (javascript)</option>
-          <option value="py">py (python)</option>
-          <option value="java">java</option>
-          <option value="cpp">cpp / c</option>
-          <option value="css">css</option>
-          <option value="txt">outro / texto</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Meta de linhas (mín.)</label>
-        <input type="number" id="targetLines" value="9000" min="50" step="100">
-      </div>
-      <div class="field">
-        <label>Modelo Gemini padrão <span style="opacity:.6">(usado se a chave não tiver modelo próprio)</span></label>
-        <select id="modelSelect">
-          <option value="gemini-2.5-flash">gemini-2.5-flash (rápido)</option>
-          <option value="gemini-2.5-pro">gemini-2.5-pro (mais capaz)</option>
-          <option value="gemini-3.6-flash">gemini-3.6-flash</option>
-        </select>
-      </div>
-    </div>
-    <div class="row">
-      <div class="field">
-        <label><input type="checkbox" id="infiniteMode" style="width:auto; margin-right:6px;">Modo infinito (ignora a meta e só para quando eu clicar em "parar")</label>
-      </div>
-      <div class="field">
-        <label>Paralelismo (seções ao mesmo tempo)</label>
-        <select id="concurrencySelect">
-          <option value="1">1 — sequencial (mais econômico)</option>
-          <option value="2" selected>2 por vez</option>
-          <option value="3">3 por vez</option>
-          <option value="4">4 por vez</option>
-        </select>
-      </div>
-      <div class="field">
-        <label>Tamanho do lote de verificação (linhas por chamada)</label>
-        <input type="number" id="verifyChunkLines" value="1500" min="200" step="100">
-      </div>
-    </div>
-  </section>
+      <div class="bracket tl"></div>
+      <div class="bracket tr"></div>
+      <div class="bracket bl"></div>
+      <div class="bracket br"></div>
+      <div class="scanline" id="scanline"></div>
 
-  <section class="panel">
-    <h2>03 · Execução</h2>
-    <div class="controls">
-      <button class="btn btn-primary" id="startBtn">▶ iniciar pipeline</button>
-      <button class="btn btn-stop hidden" id="stopBtn">■ parar</button>
-      <div class="progress-wrap">
-        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
-        <div class="progress-label" id="progressLabel">aguardando início</div>
+      <div id="fps-badge"><b id="fps-val">0</b> FPS</div>
+      <div id="hud-readout">
+        <span id="rd-hands">MÃOS: 0</span>
+        <span id="rd-coord">X: -- Y: --</span>
+      </div>
+      <div id="gesture-tag">
+        <div class="emoji" id="gesture-emoji">🖐️</div>
+        <div class="label mono" id="gesture-label">MÃO ABERTA</div>
+      </div>
+
+      <div id="empty-state">
+        <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="#35f2e0" stroke-width="1.2">
+          <path d="M12 2v9M9 5v6M15 5v6M9 11c0 5 0 8-1 9.5S6.5 22 6 20l-1-6c-.3-2 .5-3 2-3M15 11c0 5 0 8 1 9.5s1.5.5 2-1.5l1-6c.3-2-.5-3-2-3"/>
+        </svg>
+        <h2 class="display">CÂMERA DESLIGADA</h2>
+        <p>Ative a câmera para iniciar o rastreamento de landmarks da mão em tempo real, direto no navegador — nada é enviado a servidor algum.</p>
+        <button id="start-btn" class="display">▶ INICIAR RASTREIO</button>
       </div>
     </div>
-    <div id="sectionsChips" style="margin-top:12px;"></div>
-  </section>
 
-  <section class="panel hidden" id="baseFilePanel">
-    <h2>04 · Arquivo base / contrato compartilhado <span class="n">— enviado a todos os agentes</span></h2>
-    <p class="sub" style="max-width:none; margin-bottom:10px;">O agente planejador gera este esqueleto (variáveis globais, nomes e assinaturas de função) antes de qualquer seção. Todo agente de geração, expansão e verificação recebe este contrato junto do prompt, para que ninguém invente nomes divergentes.</p>
-    <div id="baseFileView" style="max-height:220px; overflow:auto; background:#080a0e; border:1px solid var(--border); border-radius:8px; padding:14px; font-family:var(--mono); font-size:12px; line-height:1.6; white-space:pre-wrap; word-break:break-word; color:#c9d1e0;"></div>
-  </section>
+    <div id="panel">
 
-  <section class="panel">
-    <h2>05 · Log dos agentes</h2>
-    <div id="log"></div>
-  </section>
+      <div>
+        <div class="section-title">ESTATÍSTICAS</div>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="k">Mãos</div><div class="v accent" id="stat-hands">0</div></div>
+          <div class="stat-box"><div class="k">Gesto</div><div class="v" id="stat-gesture" style="font-size:12px; line-height:1.6;">—</div></div>
+          <div class="stat-box"><div class="k">FPS</div><div class="v violet" id="stat-fps">0</div></div>
+          <div class="stat-box"><div class="k">Latência</div><div class="v" id="stat-latency" style="font-size:13px;">0ms</div></div>
+        </div>
+      </div>
 
-  <section class="panel hidden" id="outputPanel">
-    <h2>06 · Arquivo final <span class="n" id="outputMeta"></span></h2>
-    <div class="output-tabs">
-      <button class="tab-btn active" id="tabCode">código</button>
-      <button class="tab-btn" id="tabPreview">visualizar</button>
+      <div id="hands-container" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+      <div>
+        <div class="section-title">VISUALIZAÇÃO</div>
+        <div class="control" style="margin-bottom:10px;">
+          <div class="lbl">Estilo do esqueleto</div>
+          <div class="seg" id="style-seg">
+            <button data-v="both" class="active">LINHAS+PONTOS</button>
+            <button data-v="lines">LINHAS</button>
+            <button data-v="dots">PONTOS</button>
+          </div>
+        </div>
+        <div class="toggle-row" style="margin-bottom:10px;">
+          <span class="lbl">Espelhar câmera</span>
+          <div class="switch on" id="sw-mirror"></div>
+        </div>
+        <div class="toggle-row" style="margin-bottom:10px;">
+          <span class="lbl">Rastro nos dedos</span>
+          <div class="switch" id="sw-trail"></div>
+        </div>
+        <div class="toggle-row">
+          <span class="lbl">Mostrar rótulo de gesto</span>
+          <div class="switch on" id="sw-gesture"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">PARÂMETROS</div>
+        <div class="control" style="margin-bottom:12px;">
+          <div class="lbl">Nº máximo de mãos <b id="v-numhands">2</b></div>
+          <input type="range" id="numhands" min="1" max="4" step="1" value="2">
+        </div>
+        <div class="control" style="margin-bottom:12px;">
+          <div class="lbl">Confiança de detecção <b id="v-detconf">0.5</b></div>
+          <input type="range" id="detconf" min="0.1" max="0.9" step="0.05" value="0.5">
+        </div>
+        <div class="control">
+          <div class="lbl">Confiança de rastreio <b id="v-trkconf">0.5</b></div>
+          <input type="range" id="trkconf" min="0.1" max="0.9" step="0.05" value="0.5">
+        </div>
+      </div>
+
+      <button id="snap-btn">📸 CAPTURAR FOTO</button>
+
     </div>
-    <div id="codeView"></div>
-    <iframe id="previewFrame" class="hidden"></iframe>
-    <div class="output-actions">
-      <input type="text" id="fileNameInput" placeholder="nome-do-arquivo.ext" style="font-family:var(--mono); font-size:12px; background:rgba(255,255,255,.03); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:6px; width:220px;">
-      <button class="btn btn-primary" id="downloadBtn">⬇ baixar arquivo</button>
-      <span class="output-meta" id="lineCountLabel"></span>
-    </div>
-  </section>
+  </main>
 
+  <footer>PROCESSAMENTO 100% LOCAL NO NAVEGADOR · MEDIAPIPE HAND LANDMARKER</footer>
 </div>
 
-<script>
-(function(){
-  const AGENT_COLORS = ['#4fd1c5','#f2b84b','#e8618c','#7ed957','#5b8def','#c792ea'];
-  const PROVIDER_DEFAULT_MODEL = {
-    gemini: 'gemini-2.5-flash',
-    openai: 'gpt-4o-mini',
-    anthropic: 'claude-sonnet-4-5',
-    xai: 'grok-4'
-  };
-  const PROVIDER_LABEL = {
-    gemini: 'Gemini',
-    openai: 'ChatGPT',
-    anthropic: 'Claude',
-    xai: 'Grok'
-  };
-  let keyIdSeq = 0;
-  const state = {
-    keys: [],        // {id, label, key, colorIdx, status, role, provider, model}
-    running: false,
-    stopRequested: false,
-    genCursor: 0,
-    verifyCursor: 0,
-    sections: [],     // {name, description, code, status}
-    command: '',
-    fileNameSuggested: '',
-    baseFile: '',     // contrato compartilhado: variáveis/funções globais que todas as seções devem seguir
-  };
+<script type="module">
+import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
-  // ---------- Keys UI ----------
-  const keysList = document.getElementById('keysList');
+// ---------- elements ----------
+const video = document.getElementById('video');
+const canvas = document.getElementById('overlay');
+const ctx = canvas.getContext('2d');
+const scanner = document.getElementById('scanner');
+const emptyState = document.getElementById('empty-state');
+const startBtn = document.getElementById('start-btn');
+const statusPill = document.getElementById('status-pill');
+const statusText = document.getElementById('status-text');
+const fpsVal = document.getElementById('fps-val');
+const statFps = document.getElementById('stat-fps');
+const statHands = document.getElementById('stat-hands');
+const statGesture = document.getElementById('stat-gesture');
+const statLatency = document.getElementById('stat-latency');
+const rdHands = document.getElementById('rd-hands');
+const rdCoord = document.getElementById('rd-coord');
+const gestureTag = document.getElementById('gesture-tag');
+const gestureEmoji = document.getElementById('gesture-emoji');
+const gestureLabel = document.getElementById('gesture-label');
+const handsContainer = document.getElementById('hands-container');
+const scanline = document.getElementById('scanline');
 
-  function addKeyRow(label='', key='', role='both', provider='gemini', model=''){
-    const id = 'k'+(keyIdSeq++);
-    const colorIdx = state.keys.length % AGENT_COLORS.length;
-    state.keys.push({id, label: label || `Agente ${state.keys.length+1}`, key, colorIdx, status:'idle', role, provider, model});
-    renderKeys();
-  }
+const swMirror = document.getElementById('sw-mirror');
+const swTrail = document.getElementById('sw-trail');
+const swGesture = document.getElementById('sw-gesture');
+const numHandsSlider = document.getElementById('numhands');
+const detConfSlider = document.getElementById('detconf');
+const trkConfSlider = document.getElementById('trkconf');
+const styleSeg = document.getElementById('style-seg');
+const snapBtn = document.getElementById('snap-btn');
 
-  function renderKeys(){
-    keysList.innerHTML = '';
-    state.keys.forEach((k) => {
-      const row = document.createElement('div');
-      row.className = 'key-row';
-      row.innerHTML = `
-        <div class="key-swatch" style="background:${AGENT_COLORS[k.colorIdx]}"></div>
-        <input type="text" data-field="label" placeholder="rótulo (ex: Planejador)" value="${escapeAttr(k.label)}">
-        <select class="provider-select" data-field="provider" title="provedor desta chave">
-          <option value="gemini">Gemini</option>
-          <option value="openai">ChatGPT (OpenAI)</option>
-          <option value="anthropic">Claude (Anthropic)</option>
-          <option value="xai">Grok (xAI)</option>
-        </select>
-        <input type="password" data-field="key" placeholder="cole a chave de API deste provedor" value="${escapeAttr(k.key)}">
-        <input type="text" data-field="model" placeholder="modelo (opcional)" value="${escapeAttr(k.model)}">
-        <select class="role-select" data-field="role" title="o que esta chave pode fazer no pipeline">
-          <option value="both">geração + verificação</option>
-          <option value="gen">só geração</option>
-          <option value="verify">só verificação</option>
-        </select>
-        <button title="remover">✕</button>
-      `;
-      row.querySelector('[data-field=label]').addEventListener('input', e => k.label = e.target.value);
-      row.querySelector('[data-field=key]').addEventListener('input', e => k.key = e.target.value.trim());
-      row.querySelector('[data-field=model]').addEventListener('input', e => k.model = e.target.value.trim());
-      const providerSelect = row.querySelector('[data-field=provider]');
-      providerSelect.value = k.provider || 'gemini';
-      providerSelect.addEventListener('change', e => {
-        k.provider = e.target.value;
-        const modelInput = row.querySelector('[data-field=model]');
-        modelInput.placeholder = `modelo (padrão: ${PROVIDER_DEFAULT_MODEL[k.provider]})`;
-      });
-      providerSelect.dispatchEvent(new Event('change'));
-      const roleSelect = row.querySelector('[data-field=role]');
-      roleSelect.value = k.role || 'both';
-      roleSelect.addEventListener('change', e => k.role = e.target.value);
-      row.querySelector('button').addEventListener('click', () => {
-        state.keys = state.keys.filter(x => x.id !== k.id);
-        renderKeys();
-      });
-      keysList.appendChild(row);
-    });
-  }
+// ---------- state ----------
+let handLandmarker = null;
+let running = false;
+let mirror = true;
+let trailOn = false;
+let gestureLabelsOn = true;
+let skeletonStyle = 'both';
+let numHands = 2;
+let detConf = 0.5;
+let trkConf = 0.5;
+let lastVideoTime = -1;
+let trails = {}; // per hand index -> array of points
 
-  function escapeAttr(s){ return (s||'').replace(/"/g,'&quot;'); }
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],
+  [0,17]
+];
 
-  document.getElementById('addKeyBtn').addEventListener('click', () => addKeyRow());
-  addKeyRow('Agente 1', '', 'both', 'gemini');
-
-  // ---------- Log ----------
-  const logEl = document.getElementById('log');
-  function log(msg, {agentColor=null, cls=''} = {}){
-    const line = document.createElement('div');
-    line.className = 'log-line';
-    const time = new Date().toLocaleTimeString('pt-BR', {hour12:false});
-    let badge = '';
-    if(agentColor) badge = `<span class="log-badge" style="background:${agentColor}22; color:${agentColor}">agente</span>`;
-    line.innerHTML = `<span class="log-time">${time}</span>${badge}<span class="log-msg ${cls}">${msg}</span>`;
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-
-  // ---------- Progress ----------
-  const progressFill = document.getElementById('progressFill');
-  const progressLabel = document.getElementById('progressLabel');
-  function setProgress(pct, label){
-    progressFill.style.width = Math.max(0,Math.min(100,pct))+'%';
-    progressLabel.textContent = label;
-  }
-
-  // ---------- Section chips ----------
-  const chipsEl = document.getElementById('sectionsChips');
-  function renderChips(){
-    chipsEl.innerHTML = '';
-    state.sections.forEach(s => {
-      const chip = document.createElement('span');
-      chip.className = 'section-chip ' + (s.status === 'done' ? 'done' : s.status === 'error' ? 'err' : '');
-      chip.innerHTML = `<span class="sw" style="background:${s.status==='done' ? 'var(--green)' : s.status==='error' ? 'var(--red)' : 'var(--text-faint)'}"></span>${s.name}`;
-      chipsEl.appendChild(chip);
-    });
-  }
-
-  // ---------- Multi-provider AI call ----------
-  // Seleciona a próxima chave adequada para um papel ('gen' geração/planejamento ou 'verify' verificação/correção).
-  // O rodízio inclui TODAS as chaves utilizáveis, independente do provedor — misturar Gemini/ChatGPT/Claude/Grok
-  // é justamente o que distribui a carga de tokens entre contas e provedores diferentes em vez de bater sempre
-  // na mesma API. Chaves marcadas com o papel exato têm prioridade; chaves "both" servem para qualquer papel;
-  // se nenhuma chave dedicada estiver disponível, cai para qualquer chave utilizável (para não travar
-  // o pipeline de quem só cadastrou uma chave).
-  function nextKey(role='gen'){
-    const usable = state.keys.filter(k => k.key && k.status !== 'bad');
-    if(usable.length === 0) return null;
-    const exact = usable.filter(k => (k.role || 'both') === role);
-    const flexible = usable.filter(k => (k.role || 'both') === 'both');
-    const pool = exact.length ? exact : (flexible.length ? flexible : usable);
-    const cursorField = role === 'verify' ? 'verifyCursor' : 'genCursor';
-    const k = pool[state[cursorField] % pool.length];
-    state[cursorField]++;
-    return k;
-  }
-
-  function modelFor(agentKey){
-    if(agentKey.model) return agentKey.model;
-    if(agentKey.provider === 'gemini') return document.getElementById('modelSelect').value;
-    return PROVIDER_DEFAULT_MODEL[agentKey.provider] || PROVIDER_DEFAULT_MODEL.gemini;
-  }
-
-  async function callGeminiProvider(agentKey, prompt, {json, maxTokens, temperature}){
-    const model = modelFor(agentKey);
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    const body = {
-      contents: [{ role:'user', parts:[{text: prompt}] }],
-      generationConfig: {
-        maxOutputTokens: maxTokens,
-        temperature,
-        ...(json ? {responseMimeType:'application/json'} : {})
-      }
-    };
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'x-goog-api-key': agentKey.key},
-      body: JSON.stringify(body)
-    });
-    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
-    const data = await res.json();
-    const text = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts || [])
-      .map(p => p.text || '').join('');
-    return text;
-  }
-
-  async function callOpenAIProvider(agentKey, prompt, {json, maxTokens, temperature}){
-    const model = modelFor(agentKey);
-    const url = 'https://api.openai.com/v1/chat/completions';
-    const body = {
-      model,
-      messages: [{role:'user', content: prompt}],
-      max_tokens: maxTokens,
-      temperature,
-      ...(json ? {response_format:{type:'json_object'}} : {})
-    };
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${agentKey.key}`},
-      body: JSON.stringify(body)
-    });
-    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
-    const data = await res.json();
-    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-  }
-
-  // Grok (xAI) usa uma API compatível com o formato da OpenAI.
-  async function callXaiProvider(agentKey, prompt, {json, maxTokens, temperature}){
-    const model = modelFor(agentKey);
-    const url = 'https://api.x.ai/v1/chat/completions';
-    const body = {
-      model,
-      messages: [{role:'user', content: prompt}],
-      max_tokens: maxTokens,
-      temperature,
-      ...(json ? {response_format:{type:'json_object'}} : {})
-    };
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{'Content-Type':'application/json', 'Authorization': `Bearer ${agentKey.key}`},
-      body: JSON.stringify(body)
-    });
-    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
-    const data = await res.json();
-    return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-  }
-
-  async function callAnthropicProvider(agentKey, prompt, {json, maxTokens, temperature}){
-    const model = modelFor(agentKey);
-    const url = 'https://api.anthropic.com/v1/messages';
-    const body = {
-      model,
-      max_tokens: maxTokens,
-      temperature,
-      messages: [{role:'user', content: json ? `${prompt}\n\nResponda SOMENTE com JSON válido, sem markdown, sem texto fora do JSON.` : prompt}]
-    };
-    const res = await fetch(url, {
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key': agentKey.key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify(body)
-    });
-    if(!res.ok){ throw new Error(`HTTP ${res.status}: ${(await res.text()).slice(0,200)}`); }
-    const data = await res.json();
-    return (data.content || []).map(b => b.text || '').join('');
-  }
-
-  // Roteador único: encaminha para a API do provedor certo com base em agentKey.provider,
-  // mantendo a mesma assinatura que o resto do pipeline já usa (chamava-se callGemini antes
-  // de suportar múltiplos provedores).
-  async function callAI(agentKey, prompt, {json=false, maxTokens=8192, temperature=0.45, retries=1} = {}){
-    let lastErr = null;
-    for(let attempt=0; attempt <= retries; attempt++){
-      try{
-        let text;
-        switch(agentKey.provider){
-          case 'openai': text = await callOpenAIProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
-          case 'anthropic': text = await callAnthropicProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
-          case 'xai': text = await callXaiProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
-          case 'gemini':
-          default: text = await callGeminiProvider(agentKey, prompt, {json, maxTokens, temperature}); break;
-        }
-        agentKey.status = 'ok';
-        if(!text) throw new Error('resposta vazia do modelo (pode ter sido bloqueada)');
-        return text;
-      }catch(e){
-        lastErr = e;
-        agentKey.status = 'bad';
-        await sleep(400);
-      }
-    }
-    throw lastErr;
-  }
-
-  function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
-
-  function parseJsonLoose(text){
-    let t = text.trim();
-    t = t.replace(/^```json/i,'').replace(/^```/,'').replace(/```$/,'').trim();
-    return JSON.parse(t);
-  }
-
-  function commentPrefix(fileType){
-    if(fileType === 'html') return {open:'<!-- == SECAO: ', close: ' == -->'};
-    if(fileType === 'py') return {open:'# == SECAO: ', close: ' =='};
-    return {open:'// == SECAO: ', close: ' =='};
-  }
-
-  // ---------- Pipeline ----------
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-
-  startBtn.addEventListener('click', runPipeline);
-  stopBtn.addEventListener('click', () => {
-    state.stopRequested = true;
-    log('Parada solicitada pelo usuário — finalizando etapa atual...', {cls:'err'});
+// ---------- setup mediapipe ----------
+async function initModel(){
+  const filesetResolver = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+    baseOptions: {
+      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate: "GPU"
+    },
+    runningMode: "VIDEO",
+    numHands: numHands,
+    minHandDetectionConfidence: detConf,
+    minHandPresenceConfidence: detConf,
+    minTrackingConfidence: trkConf
   });
-
-  async function runPipeline(){
-    const brief = document.getElementById('briefInput').value.trim();
-    const fileType = document.getElementById('fileTypeSelect').value;
-    const targetLines = parseInt(document.getElementById('targetLines').value, 10) || 400;
-
-    if(!brief){ alert('Descreva o que você quer que a IA construa.'); return; }
-    const validKeys = state.keys.filter(k => k.key);
-    if(validKeys.length === 0){ alert('Adicione pelo menos uma chave de API válida (Gemini, OpenAI, Anthropic ou xAI).'); return; }
-
-    state.running = true;
-    state.stopRequested = false;
-    state.sections = [];
-    state.baseFile = '';
-    state.genCursor = 0;
-    state.verifyCursor = 0;
-    logEl.innerHTML = '';
-    document.getElementById('outputPanel').classList.add('hidden');
-    document.getElementById('baseFilePanel').classList.add('hidden');
-    document.getElementById('baseFileView').textContent = '';
-    startBtn.classList.add('hidden');
-    stopBtn.classList.remove('hidden');
-    setProgress(2, 'planejando o arquivo...');
-    const providerCounts = {};
-    validKeys.forEach(k => providerCounts[k.provider] = (providerCounts[k.provider]||0)+1);
-    const providerSummary = Object.entries(providerCounts).map(([p,n]) => `${PROVIDER_LABEL[p]||p} x${n}`).join(', ');
-    log(`Time de agentes: ${providerSummary}.`, {cls:'hl'});
-    log('Enviando o pedido para o agente planejador...', {cls:'hl'});
-
-    try{
-      // 1) PLANEJAMENTO — o planejador também escreve o "arquivo base": um contrato
-      // com as variáveis globais e assinaturas de função que todo o resto do pipeline
-      // deve respeitar, para as seções não inventarem nomes/assinaturas divergentes.
-      const planner = nextKey('gen');
-      const planPrompt = `Você é o planejador de um sistema multi-agente que gera arquivos de código grandes e completos. Outros agentes, cada um vendo só a descrição da própria seção, vão escrever o código em paralelo — por isso seu plano precisa deixar um contrato explícito para todos seguirem.
-
-Tarefa do usuário:
-"""
-${brief}
-"""
-
-Tipo de arquivo: ${fileType}
-Meta: aproximadamente ${targetLines} linhas de código funcional no total — é um alvo, não um mínimo a estourar. Não planeje muito mais do que isso.
-
-Responda APENAS com um JSON neste formato exato:
-{
-  "comando": "instrução clara e detalhada de implementação, resumindo o que o arquivo final deve fazer e como as seções se conectam",
-  "nomeArquivo": "nome-sugerido.${fileType}",
-  "arquivoBase": "texto (não JSON aninhado, uma string só) listando: (1) todas as variáveis/estados globais compartilhados com seus nomes exatos e tipo/formato; (2) a assinatura de cada função ou entidade importante que mais de uma seção vai usar, no formato 'nomeFuncao(parametro1, parametro2) -> retorno — o que faz'; (3) convenções de nomenclatura (ex: camelCase, prefixos). Isso é o contrato que todas as seções devem seguir à risca para o arquivo final funcionar sem conflitos.",
-  "secoes": [{"nome":"nome_curto_em_snake_case","descricao":"o que essa seção/função deve conter e fazer, incluindo quais itens do arquivoBase ela implementa ou consome"}]
 }
 
-Planeje o número de seções e o tamanho aproximado de cada uma para que a SOMA fique perto da meta (~80-150 linhas por seção como referência) — não crie seções demais nem funções fora do que a tarefa pede, isso só gasta tokens à toa e aumenta a chance de bugs de integração. Só inclua funções que a tarefa do usuário realmente precisa. Não escreva nada fora do JSON.`;
-
-      const planRaw = await callAI(planner, planPrompt, {json:true, maxTokens:4096, temperature:0.5});
-      const plan = parseJsonLoose(planRaw);
-      state.command = plan.comando || brief;
-      state.fileNameSuggested = plan.nomeArquivo || `arquivo.${fileType}`;
-      state.baseFile = (plan.arquivoBase || '').trim();
-      state.sections = (plan.secoes || []).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
-      renderChips();
-      log(`Plano recebido (via ${PROVIDER_LABEL[planner.provider]||planner.provider}): ${state.sections.length} seções.`, {agentColor:AGENT_COLORS[planner.colorIdx], cls:'ok'});
-      if(state.baseFile){
-        document.getElementById('baseFilePanel').classList.remove('hidden');
-        document.getElementById('baseFileView').textContent = state.baseFile;
-        log('Arquivo base (contrato de nomes e assinaturas) gerado e será enviado a todos os agentes.', {cls:'hl'});
-      }
-
-      // 2) GERAÇÃO POR SEÇÃO (com expansão até atingir a meta de linhas, ou infinita até "parar")
-      const infiniteMode = document.getElementById('infiniteMode').checked;
-      state.targetLines = targetLines;
-      state.infiniteMode = infiniteMode;
-      // Trava de segurança bem mais curta: o objetivo é parar perto da meta,
-      // não ficar pedindo seções novas até o plano ou a cota da API acabarem.
-      const MAX_ROUNDS = infiniteMode ? 100000 : 10;
-      let round = 0;
-      while(!state.stopRequested && round < MAX_ROUNDS){
-        await generatePendingSections(fileType);
-        const totalLines = countLines();
-        setProgress(20 + Math.min(50, (totalLines/targetLines)*50), `${totalLines} / ${infiniteMode ? '∞' : targetLines} linhas geradas...`);
-        // Para no modo normal assim que a meta é atingida (com uma pequena folga),
-        // e não deixa o gap residual pequeno disparar mais uma rodada inteira.
-        const closeEnough = !infiniteMode && totalLines >= targetLines * 0.95;
-        if(closeEnough || state.stopRequested) break;
-        round++;
-        log(`Linhas até agora: ${totalLines}${infiniteMode ? '' : '/'+targetLines}. Pedindo mais seções ao planejador...`, {cls:'hl'});
-        const more = nextKey('gen');
-        // Envia só as últimas seções + a contagem total, não a lista inteira,
-        // para manter o prompt pequeno mesmo com milhares de linhas já geradas (economia de tokens).
-        const recentNames = state.sections.slice(-25).map(s => s.name).join(', ');
-        const gap = infiniteMode ? null : Math.max(0, targetLines - totalLines);
-        const avgLinesPerSection = totalLines > 0 ? Math.max(20, Math.round(totalLines / state.sections.length)) : 60;
-        // Máximo de seções pedidas por rodada bem menor, para não estourar a meta de uma vez.
-        const suggestedCount = infiniteMode ? 6 : Math.min(6, Math.max(2, Math.ceil(gap / avgLinesPerSection)));
-        const morePrompt = `O arquivo (tipo ${fileType}) sobre o seguinte projeto ainda está incompleto:
-"""
-${state.command}
-"""
-${state.baseFile ? `Contrato/arquivo base já definido (novas seções devem respeitar esses nomes e assinaturas, ou propor extensões compatíveis com ele):\n"""\n${state.baseFile}\n"""\n` : ''}
-Total de seções já criadas: ${state.sections.length} (últimas: ${recentNames}).
-Linhas atuais: ${totalLines}. ${infiniteMode ? 'Modo infinito: continue propondo seções novas e úteis.' : `Meta: ${targetLines}.`}
-
-Proponha ${suggestedCount} seções NOVAS (funções, módulos, casos extras, testes, tratamento de erros, estilos, documentação, etc), sem repetir as existentes, para aproximar o arquivo da meta.
-Responda apenas com JSON: {"secoes":[{"nome":"...","descricao":"..."}]}`;
-        try{
-          const moreRaw = await callAI(more, morePrompt, {json:true, maxTokens:2048, temperature:0.6});
-          const moreParsed = parseJsonLoose(moreRaw);
-          const newOnes = (moreParsed.secoes||[]).map(s => ({name:s.nome, description:s.descricao, code:'', status:'pending'}));
-          if(newOnes.length === 0){
-            state.stagnantRounds = (state.stagnantRounds||0) + 1;
-            if(state.stagnantRounds >= 4){ log('O planejador parou de propor seções novas. Encerrando a expansão.', {cls:'err'}); break; }
-          } else {
-            state.stagnantRounds = 0;
-          }
-          state.sections.push(...newOnes);
-          renderChips();
-        }catch(e){
-          log('Não foi possível expandir mais seções, seguindo com o que já foi gerado.', {cls:'err'});
-          break;
-        }
-      }
-
-      if(state.stopRequested){
-        log('Pipeline interrompido pelo usuário antes da verificação.', {cls:'err'});
-        finalizeOutput(fileType);
-        return;
-      }
-
-      // 3) VERIFICAÇÃO BÁSICA — só uma vez, com o código já pronto.
-      // Em vez de ficar verificando e reverificando (o que consome muitos tokens),
-      // roda uma única passada: encontra problemas óbvios, corrige e encerra.
-      setProgress(75, 'revisão básica final do arquivo...');
-      if(!state.stopRequested){
-        await verifyAndFix(fileType);
-      }
-
-      // 4) FINALIZAÇÃO
-      setProgress(100, 'arquivo finalizado.');
-      log('Todos os agentes concluíram a montagem e revisão do arquivo.', {cls:'ok'});
-      finalizeOutput(fileType);
-
-    }catch(e){
-      log('Erro no pipeline: ' + e.message, {cls:'err'});
-      setProgress(0, 'erro — veja o log');
-    }finally{
-      state.running = false;
-      startBtn.classList.remove('hidden');
-      stopBtn.classList.add('hidden');
-    }
-  }
-
-  async function generateOneSection(sec, fileType, allNames){
-    const agent = nextKey('gen');
-    if(!agent){ sec.status = 'error'; log('Nenhuma chave válida disponível.', {cls:'err'}); return; }
-    log(`Gerando seção "${sec.name}" (via ${PROVIDER_LABEL[agent.provider]||agent.provider})...`, {agentColor:AGENT_COLORS[agent.colorIdx]});
-    const prompt = `Você é um agente de codificação colaborando com outros agentes (possivelmente de provedores de IA diferentes) para montar UM ÚNICO arquivo final, seção por seção.
-
-Instrução geral do projeto:
-"""
-${state.command}
-"""
-${state.baseFile ? `Contrato/arquivo base compartilhado por TODOS os agentes — use exatamente estes nomes de variáveis globais e estas assinaturas de função quando essa seção implementar ou chamar algo listado aqui (não invente nomes alternativos):\n"""\n${state.baseFile}\n"""\n` : ''}
-Todas as seções planejadas, em ordem: ${allNames}
-
-Gere APENAS o código da seção abaixo, em ${fileType}, compatível em estilo e nomes com as demais seções.
-
-Seção: "${sec.name}"
-Descrição: ${sec.description}
-
-Regras para a geração das funções desta seção:
-- Cada função com responsabilidade própria deve ser uma função nomeada e independente (não amontoe várias responsabilidades numa função só).
-- Se o nome/assinatura da função já está no contrato acima, implemente-o exatamente como descrito ali (mesmo nome, mesma ordem e sentido de parâmetros).
-- Se for uma função nova, dê um nome claro em ${fileType === 'py' ? 'snake_case' : 'camelCase'} que não colida com nomes já usados em outras seções, e não redeclare nada que já exista no contrato ou nas seções: ${allNames}.
-- Documente cada função com um comentário curto acima dizendo o que ela recebe e o que retorna.
-- Trate entradas inválidas ou casos de borda óbvios em vez de assumir que os dados sempre chegam corretos.
-- Não repita código de outras seções nem redefina uma função que outra seção já deve declarar.
-- Responda SOMENTE com código, sem markdown, sem blocos \`\`\`, sem explicações antes ou depois.`;
-    try{
-      // Limita o orçamento de tokens da seção à sua "fatia justa" da meta de linhas,
-      // em vez de sempre pedir o máximo — evita seções infladas que estouram o alvo.
-      const maxTokens = sectionTokenBudget();
-      const code = await callAI(agent, prompt, {json:false, maxTokens, temperature:0.4});
-      sec.code = stripFences(code);
-      sec.status = 'done';
-    }catch(e){
-      sec.status = 'error';
-      log(`Falha ao gerar "${sec.name}": ${e.message}`, {cls:'err'});
-    }
-    renderChips();
-  }
-
-  // Estima quantos tokens uma seção deve receber com base na meta de linhas e no
-  // número de seções já planejadas, para não gerar seções muito maiores que o necessário.
-  function sectionTokenBudget(){
-    if(state.infiniteMode || !state.targetLines || !state.sections.length) return 8192;
-    const plannedCount = Math.max(1, state.sections.length);
-    const linesPerSection = Math.max(30, Math.min(220, Math.ceil((state.targetLines / plannedCount) * 1.4)));
-    const tokens = linesPerSection * 16; // ~16 tokens por linha de código, com folga
-    return Math.max(1024, Math.min(8192, tokens));
-  }
-
-  // Gera as seções pendentes em lotes paralelos — várias chaves/agentes (de qualquer provedor)
-  // trabalham ao mesmo tempo em seções diferentes, em vez de uma de cada vez.
-  async function generatePendingSections(fileType){
-    const allNames = state.sections.map(s => s.name).join(', ');
-    const concurrency = Math.max(1, parseInt(document.getElementById('concurrencySelect').value, 10) || 1);
-    let pending = state.sections.filter(s => s.status === 'pending');
-    while(pending.length && !state.stopRequested){
-      const batch = pending.slice(0, concurrency);
-      await Promise.all(batch.map(sec => generateOneSection(sec, fileType, allNames)));
-      await sleep(150);
-      pending = state.sections.filter(s => s.status === 'pending');
-    }
-  }
-
-  function stripFences(text){
-    let t = text.trim();
-    t = t.replace(/^```[a-zA-Z]*\n?/,'').replace(/```$/,'');
-    return t.trim();
-  }
-
-  function commentLine(fileType, text){
-    if(fileType === 'html') return `<!-- ${text} -->`;
-    if(fileType === 'py') return `# ${text}`;
-    return `// ${text}`;
-  }
-
-  function mergedCode(fileType){
-    const cp = commentPrefix(fileType);
-    const body = state.sections
-      .filter(s => s.code)
-      .map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`)
-      .join('\n\n');
-    if(!state.baseFile) return body;
-    const baseComment = state.baseFile.split('\n').map(l => commentLine(fileType, l)).join('\n');
-    return `${cp.open}arquivo_base_contrato${cp.close}\n${baseComment}\n\n${body}`;
-  }
-
-  function countLines(){
-    return state.sections.reduce((acc,s) => acc + (s.code ? s.code.split('\n').length : 0), 0);
-  }
-
-  function renderMergedPreviewLive(fileType){
-    // leve atualização do log de progresso, sem mexer na aba de output ainda
-  }
-
-  // Divide as seções já geradas em lotes de ~N linhas, para que a verificação
-  // nunca precise mandar o arquivo inteiro numa única chamada (gasta menos tokens
-  // por vez, funciona mesmo com arquivos de milhares de linhas).
-  function chunkSectionsByLines(maxLinesPerChunk){
-    const done = state.sections.filter(s => s.code);
-    const chunks = [];
-    let current = [];
-    let currentLines = 0;
-    for(const sec of done){
-      const secLines = sec.code.split('\n').length;
-      if(current.length && currentLines + secLines > maxLinesPerChunk){
-        chunks.push(current);
-        current = [];
-        currentLines = 0;
-      }
-      current.push(sec);
-      currentLines += secLines;
-    }
-    if(current.length) chunks.push(current);
-    return chunks;
-  }
-
-  async function verifyChunk(chunkSecs, fileType){
-    const verifier = nextKey('verify');
-    if(!verifier) return [];
-    const cp = commentPrefix(fileType);
-    const code = chunkSecs.map(s => `${cp.open}${s.name}${cp.close}\n${s.code}`).join('\n\n');
-    log(`Verificando lote com ${chunkSecs.length} seção(ões) (via ${PROVIDER_LABEL[verifier.provider]||verifier.provider})...`, {agentColor:AGENT_COLORS[verifier.colorIdx]});
-    const prompt = `Você é o agente verificador. Esta é a única passada de revisão deste arquivo (revisão básica, não precisa ser exaustiva). Analise o trecho abaixo (linguagem: ${fileType}, parte de um arquivo maior) e aponte SOMENTE problemas que realmente quebram o código: erro de sintaxe, função/variável usada mas nunca definida, chamada com assinatura errada, ou referência quebrada.
-Ignore preferências de estilo, otimizações ou coisas que "poderiam ser melhores" — só reporte o que de fato impede o código de funcionar.
-${state.baseFile ? `Verifique também se o trecho respeita este contrato de nomes/assinaturas compartilhado entre os agentes; um nome ou assinatura de função diferente do contrato conta como problema:\n"""\n${state.baseFile}\n"""\n` : ''}
-As seções estão marcadas por comentários indicando o nome de cada uma.
-
-Trecho:
-"""
-${code}
-"""
-
-Responda apenas com JSON:
-{"temErros": true/false, "problemas": [{"secao": "nome_da_secao_exato", "problema": "descrição objetiva do erro", "sugestaoDeCorrecao": "como corrigir"}]}
-
-Se não houver problemas relevantes, responda {"temErros": false, "problemas": []}.`;
-    try{
-      const raw = await callAI(verifier, prompt, {json:true, maxTokens:3072, temperature:0.2});
-      const result = parseJsonLoose(raw);
-      return (result.temErros && result.problemas) ? result.problemas : [];
-    }catch(e){
-      log('Verificação de um lote falhou, mantendo esse trecho como está.', {cls:'err'});
-      return [];
-    }
-  }
-
-  async function fixSection(sec, prob){
-    const fixer = nextKey('verify');
-    if(!fixer) return;
-    log(`Corrigindo seção "${sec.name}" (via ${PROVIDER_LABEL[fixer.provider]||fixer.provider})...`, {agentColor:AGENT_COLORS[fixer.colorIdx]});
-    const fixPrompt = `Corrija a seção de código abaixo com base no problema identificado. Mantenha o mesmo propósito e compatibilidade com o restante do projeto.
-
-Projeto:
-"""
-${state.command}
-"""
-${state.baseFile ? `Contrato/arquivo base compartilhado (a correção precisa continuar respeitando estes nomes e assinaturas):\n"""\n${state.baseFile}\n"""\n` : ''}
-Seção: "${sec.name}"
-Código atual:
-"""
-${sec.code}
-"""
-
-Problema identificado: ${prob.problema}
-Sugestão de correção: ${prob.sugestaoDeCorrecao}
-
-Responda SOMENTE com o código corrigido e completo dessa seção, sem markdown, sem explicações.`;
-    try{
-      const fixed = await callAI(fixer, fixPrompt, {json:false, maxTokens:8192, temperature:0.3});
-      sec.code = stripFences(fixed);
-    }catch(e){
-      log(`Não foi possível corrigir "${sec.name}": ${e.message}`, {cls:'err'});
-    }
-  }
-
-  async function verifyAndFix(fileType){
-    const chunkLines = Math.max(200, parseInt(document.getElementById('verifyChunkLines').value, 10) || 800);
-    const concurrency = Math.max(1, parseInt(document.getElementById('concurrencySelect').value, 10) || 1);
-    const chunks = chunkSectionsByLines(chunkLines);
-    log(`Verificação dividida em ${chunks.length} lote(s) para não gastar tudo de uma vez.`, {cls:'hl'});
-
-    // Verifica os lotes em paralelo (respeitando o paralelismo escolhido)
-    const allProblems = [];
-    for(let i = 0; i < chunks.length; i += concurrency){
-      if(state.stopRequested) break;
-      const slice = chunks.slice(i, i + concurrency);
-      const results = await Promise.all(slice.map(c => verifyChunk(c, fileType)));
-      results.forEach(probs => allProblems.push(...probs));
-    }
-
-    if(allProblems.length === 0){
-      log('Nenhum problema encontrado pela verificação.', {cls:'ok'});
-      return true;
-    }
-
-    log(`Verificação encontrou ${allProblems.length} problema(s) no total. Todos os agentes param e corrigem juntos...`, {cls:'err'});
-    // Corrige as seções problemáticas em paralelo, várias IAs ao mesmo tempo
-    for(let i = 0; i < allProblems.length; i += concurrency){
-      if(state.stopRequested) break;
-      const slice = allProblems.slice(i, i + concurrency);
-      await Promise.all(slice.map(prob => {
-        const sec = state.sections.find(s => s.name === prob.secao);
-        return sec ? fixSection(sec, prob) : Promise.resolve();
-      }));
-    }
-    return false;
-  }
-
-  // ---------- Output ----------
-  const outputPanel = document.getElementById('outputPanel');
-  const codeView = document.getElementById('codeView');
-  const previewFrame = document.getElementById('previewFrame');
-  const tabCode = document.getElementById('tabCode');
-  const tabPreview = document.getElementById('tabPreview');
-  const fileNameInput = document.getElementById('fileNameInput');
-
-  function finalizeOutput(fileType){
-    const code = mergedCode(fileType);
-    codeView.textContent = code;
-    outputPanel.classList.remove('hidden');
-    document.getElementById('outputMeta').textContent = `— ${state.sections.filter(s=>s.status==='done').length}/${state.sections.length} seções`;
-    document.getElementById('lineCountLabel').textContent = `${code.split('\n').length} linhas`;
-    fileNameInput.value = state.fileNameSuggested || `arquivo.${fileType}`;
-    const canPreview = fileType === 'html' && /<\/?[a-z][\s\S]*>/i.test(code);
-    tabPreview.style.display = canPreview ? '' : 'none';
-    showTab('code');
-    outputPanel.scrollIntoView({behavior:'smooth', block:'start'});
-  }
-
-  function showTab(which){
-    if(which === 'code'){
-      codeView.classList.remove('hidden');
-      previewFrame.classList.add('hidden');
-      tabCode.classList.add('active');
-      tabPreview.classList.remove('active');
-    }else{
-      previewFrame.srcdoc = codeView.textContent;
-      codeView.classList.add('hidden');
-      previewFrame.classList.remove('hidden');
-      tabPreview.classList.add('active');
-      tabCode.classList.remove('active');
-    }
-  }
-  tabCode.addEventListener('click', () => showTab('code'));
-  tabPreview.addEventListener('click', () => showTab('preview'));
-
-  document.getElementById('downloadBtn').addEventListener('click', () => {
-    const blob = new Blob([codeView.textContent], {type:'text/plain;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileNameInput.value.trim() || 'arquivo.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+async function rebuildModel(){
+  if(!handLandmarker) return;
+  handLandmarker.setOptions({
+    numHands: numHands,
+    minHandDetectionConfidence: detConf,
+    minHandPresenceConfidence: detConf,
+    minTrackingConfidence: trkConf
   });
+}
 
-})();
+// ---------- camera ----------
+async function startCamera(){
+  startBtn.disabled = true;
+  startBtn.textContent = 'CARREGANDO MODELO...';
+  try{
+    if(!handLandmarker) await initModel();
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width:{ideal:1280}, height:{ideal:720}, facingMode:'user' },
+      audio:false
+    });
+    video.srcObject = stream;
+    await new Promise(res => video.onloadedmetadata = res);
+    video.play();
+    resizeCanvas();
+    emptyState.classList.add('hidden');
+    statusPill.classList.add('live');
+    statusText.textContent = 'AO VIVO';
+    running = true;
+    requestAnimationFrame(loop);
+  }catch(err){
+    console.error(err);
+    startBtn.disabled = false;
+    startBtn.textContent = '▶ INICIAR RASTREIO';
+    alert('Não foi possível acessar a câmera. Verifique as permissões do navegador.\n\n' + err.message);
+  }
+}
+
+function resizeCanvas(){
+  const rect = scanner.getBoundingClientRect();
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+}
+window.addEventListener('resize', resizeCanvas);
+
+// ---------- helpers ----------
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+
+function fingerStates(lm){
+  // returns [thumb, index, middle, ring, pinky] booleans
+  const wrist = lm[0];
+  const tips = [4,8,12,16,20];
+  const pips = [2,6,10,14,18];
+  const states = [];
+  // thumb: distance based
+  const thumbTip = lm[4], thumbMcp = lm[2];
+  states.push(dist(thumbTip,wrist) > dist(thumbMcp,wrist) * 1.35);
+  for(let i=1;i<5;i++){
+    states.push(lm[tips[i]].y < lm[pips[i]].y - 0.02);
+  }
+  return states;
+}
+
+function detectGesture(lm, states){
+  const [thumb, index, middle, ring, pinky] = states;
+  const pinchDist = dist(lm[4], lm[8]);
+  if(pinchDist < 0.045) return { emoji:'🤏', label:'PINÇA' };
+  const count = states.filter(Boolean).length;
+  if(count === 5) return { emoji:'🖐️', label:'MÃO ABERTA' };
+  if(count === 0) return { emoji:'✊', label:'PUNHO FECHADO' };
+  if(index && !middle && !ring && !pinky && !thumb) return { emoji:'👆', label:'APONTANDO' };
+  if(index && middle && !ring && !pinky) return { emoji:'✌️', label:'PAZ' };
+  if(thumb && !index && !middle && !ring && !pinky) return { emoji:'👍', label:'JOINHA' };
+  if(thumb && pinky && !index && !middle && !ring) return { emoji:'🤙', label:'LIGA PRA MIM' };
+  if(index && pinky && !middle && !ring) return { emoji:'🤟', label:'ROCK' };
+  if(thumb && index && !middle && !ring && !pinky) return { emoji:'🫰', label:'PISTOLA' };
+  return { emoji:'🤚', label:'MÃO DETECTADA' };
+}
+
+function colorFor(idx){
+  return idx === 0 ? {a:'#35f2e0', b:'#7c5cff'} : {a:'#ff5c8a', b:'#ffb454'};
+}
+
+// ---------- draw ----------
+function drawHand(lm, idx, handedness, score){
+  const w = canvas.width, h = canvas.height;
+  const colors = colorFor(idx);
+  const pts = lm.map(p => ({ x: mirror ? (1-p.x)*w : p.x*w, y: p.y*h, z:p.z }));
+
+  if(skeletonStyle !== 'dots'){
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = colors.a;
+    ctx.shadowColor = colors.a;
+    ctx.shadowBlur = 8;
+    CONNECTIONS.forEach(([s,e])=>{
+      ctx.beginPath();
+      ctx.moveTo(pts[s].x, pts[s].y);
+      ctx.lineTo(pts[e].x, pts[e].y);
+      ctx.stroke();
+    });
+    ctx.shadowBlur = 0;
+  }
+
+  if(skeletonStyle !== 'lines'){
+    pts.forEach((p, i)=>{
+      const isTip = [4,8,12,16,20].includes(i);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, isTip ? 5.5 : 3.2, 0, Math.PI*2);
+      ctx.fillStyle = isTip ? colors.b : colors.a;
+      ctx.shadowColor = colors.a;
+      ctx.shadowBlur = isTip ? 10 : 4;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    });
+  }
+
+  // wrist label
+  ctx.font = '600 10px JetBrains Mono, monospace';
+  ctx.fillStyle = colors.a;
+  ctx.fillText(`${handedness.toUpperCase()} ${(score*100).toFixed(0)}%`, pts[0].x - 20, pts[0].y + 24);
+
+  // trail
+  if(trailOn){
+    const tip = pts[8];
+    if(!trails[idx]) trails[idx] = [];
+    trails[idx].push({x:tip.x, y:tip.y});
+    if(trails[idx].length > 22) trails[idx].shift();
+    trails[idx].forEach((p, i)=>{
+      const alpha = i / trails[idx].length;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 3 * alpha, 0, Math.PI*2);
+      ctx.fillStyle = colors.b;
+      ctx.globalAlpha = alpha * 0.6;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+  }
+
+  return pts[8]; // index tip for HUD readout
+}
+
+// ---------- loop ----------
+let lastFrameTime = performance.now();
+let fpsSmooth = 0;
+
+function loop(){
+  if(!running) return;
+  const now = performance.now();
+
+  if(video.currentTime !== lastVideoTime){
+    lastVideoTime = video.currentTime;
+    const t0 = performance.now();
+    const result = handLandmarker.detectForVideo(video, now);
+    const latency = performance.now() - t0;
+
+    ctx.clearRect(0,0,canvas.width, canvas.height);
+
+    const n = result.landmarks ? result.landmarks.length : 0;
+    statHands.textContent = n;
+    rdHands.textContent = `MÃOS: ${n}`;
+    statLatency.textContent = `${latency.toFixed(1)}ms`;
+    scanline.style.display = n > 0 ? 'none' : 'block';
+
+    handsContainer.innerHTML = '';
+    let primaryGesture = null;
+    let primaryTip = null;
+
+    if(n > 0){
+      result.landmarks.forEach((lm, idx)=>{
+        const handedness = result.handednesses[idx][0].categoryName === 'Right' ? 'Esquerda' : 'Direita';
+        // note: mirrored view flips real-world hand, so we swap the label for intuitive display
+        const score = result.handednesses[idx][0].score;
+        const tip = drawHand(lm, idx, handedness, score);
+        const states = fingerStates(lm);
+        const gesture = detectGesture(lm, states);
+        if(idx === 0){ primaryGesture = gesture; primaryTip = tip; }
+
+        const card = document.createElement('div');
+        card.className = 'hand-card';
+        card.innerHTML = `
+          <div class="row1">
+            <span class="side display" style="color:${idx===0?'#35f2e0':'#ff5c8a'}">MÃO ${handedness.toUpperCase()}</span>
+            <span class="conf">${(score*100).toFixed(0)}%</span>
+          </div>
+          <div class="bar"><i style="width:${(score*100).toFixed(0)}%; background:linear-gradient(to right, ${idx===0?'#7c5cff,#35f2e0':'#ffb454,#ff5c8a'})"></i></div>
+          <div class="fingers-row">
+            ${states.map(s=>`<div class="finger-dot ${s?'on':''}"></div>`).join('')}
+          </div>
+          <div style="font-size:11px; color:var(--text-dim); margin-top:2px;">${gesture.emoji} ${gesture.label}</div>
+        `;
+        handsContainer.appendChild(card);
+      });
+    } else {
+      delete trails[0]; delete trails[1]; delete trails[2]; delete trails[3];
+      handsContainer.innerHTML = `<div style="font-size:11.5px; color:var(--text-dim); text-align:center; padding:10px 0;">Nenhuma mão detectada</div>`;
+    }
+
+    if(primaryGesture && gestureLabelsOn){
+      gestureEmoji.textContent = primaryGesture.emoji;
+      gestureLabel.textContent = primaryGesture.label;
+      gestureTag.classList.add('show');
+      statGesture.textContent = `${primaryGesture.emoji} ${primaryGesture.label}`;
+    } else {
+      gestureTag.classList.remove('show');
+      statGesture.textContent = '—';
+    }
+
+    if(primaryTip){
+      rdCoord.textContent = `X: ${primaryTip.x.toFixed(0)} Y: ${primaryTip.y.toFixed(0)}`;
+    } else {
+      rdCoord.textContent = 'X: -- Y: --';
+    }
+  }
+
+  // fps
+  const dt = now - lastFrameTime;
+  lastFrameTime = now;
+  const instFps = 1000/dt;
+  fpsSmooth = fpsSmooth ? fpsSmooth*0.9 + instFps*0.1 : instFps;
+  fpsVal.textContent = Math.round(fpsSmooth);
+  statFps.textContent = Math.round(fpsSmooth);
+
+  requestAnimationFrame(loop);
+}
+
+// ---------- UI wiring ----------
+startBtn.addEventListener('click', startCamera);
+
+swMirror.addEventListener('click', ()=>{
+  mirror = !mirror;
+  swMirror.classList.toggle('on', mirror);
+  video.classList.toggle('mirror', mirror);
+});
+swTrail.addEventListener('click', ()=>{
+  trailOn = !trailOn;
+  swTrail.classList.toggle('on', trailOn);
+  trails = {};
+});
+swGesture.addEventListener('click', ()=>{
+  gestureLabelsOn = !gestureLabelsOn;
+  swGesture.classList.toggle('on', gestureLabelsOn);
+  if(!gestureLabelsOn) gestureTag.classList.remove('show');
+});
+
+styleSeg.querySelectorAll('button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    styleSeg.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    skeletonStyle = btn.dataset.v;
+  });
+});
+
+numHandsSlider.addEventListener('input', e=>{
+  numHands = parseInt(e.target.value);
+  document.getElementById('v-numhands').textContent = numHands;
+  rebuildModel();
+});
+detConfSlider.addEventListener('input', e=>{
+  detConf = parseFloat(e.target.value);
+  document.getElementById('v-detconf').textContent = detConf.toFixed(2);
+  rebuildModel();
+});
+trkConfSlider.addEventListener('input', e=>{
+  trkConf = parseFloat(e.target.value);
+  document.getElementById('v-trkconf').textContent = trkConf.toFixed(2);
+  rebuildModel();
+});
+
+snapBtn.addEventListener('click', ()=>{
+  const out = document.createElement('canvas');
+  out.width = canvas.width; out.height = canvas.height;
+  const octx = out.getContext('2d');
+  octx.save();
+  if(mirror){ octx.translate(out.width,0); octx.scale(-1,1); }
+  octx.drawImage(video, 0, 0, out.width, out.height);
+  octx.restore();
+  octx.drawImage(canvas, 0, 0);
+  const link = document.createElement('a');
+  link.download = `rastreador-mao-${Date.now()}.png`;
+  link.href = out.toDataURL('image/png');
+  link.click();
+});
+
+// preload model in background so first click is faster
+initModel().catch(()=>{});
 </script>
 </body>
 </html>
+
