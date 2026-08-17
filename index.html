@@ -37,7 +37,7 @@
   .cfg{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
   .cfg input{
     background:var(--panel-2);border:1px solid var(--line);color:var(--text);
-    padding:8px 10px;border-radius:6px;font-family:var(--mono);font-size:12px;width:200px;
+    padding:8px 10px;border-radius:6px;font-family:var(--mono);font-size:12px;width:150px;
   }
   .cfg label{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;}
   .cfg .field{display:flex;flex-direction:column;gap:4px;}
@@ -81,6 +81,7 @@
   button.danger{background:transparent;color:var(--danger);border:1px solid var(--danger);}
   button.danger:hover{background:rgba(255,93,93,.08);}
   button:disabled{opacity:.4;cursor:not-allowed;}
+  button.small{width:auto;margin-top:0;padding:6px 10px;font-size:11px;}
 
   .viewer-wrap{position:relative;display:flex;flex-direction:column;min-height:0;}
   #viewer{flex:1;min-height:0;}
@@ -94,10 +95,17 @@
   .viewer-hud .status.running::before{content:'● ';animation:pulse 1s infinite;}
   @keyframes pulse{50%{opacity:.3;}}
 
-  .loop-controls{
-    position:absolute;bottom:14px;left:14px;right:14px;display:flex;gap:10px;
+  .preview-banner{
+    position:absolute;top:14px;right:14px;display:none;align-items:center;gap:10px;
+    background:rgba(255,138,61,.15);border:1px solid var(--accent);border-radius:6px;
+    padding:8px 10px;font-family:var(--mono);font-size:11px;color:var(--accent);
   }
-  .loop-controls button{margin-top:0;width:auto;flex:1;}
+  .preview-banner button{margin:0;width:auto;padding:5px 9px;font-size:10px;}
+
+  .loop-controls{
+    position:absolute;bottom:14px;left:14px;right:14px;display:flex;gap:10px;flex-wrap:wrap;
+  }
+  .loop-controls button{margin-top:0;width:auto;flex:1;min-width:120px;}
 
   .log{display:flex;flex-direction:column;gap:8px;}
   .log-entry{
@@ -110,7 +118,27 @@
   .hint{font-size:11px;color:var(--muted);line-height:1.5;margin-top:8px;}
   .empty-state{color:var(--muted);font-size:12px;font-family:var(--mono);}
 
+  .tabs{display:flex;gap:6px;margin-bottom:14px;}
+  .tabs button{
+    flex:1;margin:0;background:var(--panel-2);color:var(--muted);border:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;text-transform:uppercase;letter-spacing:1px;
+    padding:8px;border-radius:6px;cursor:pointer;
+  }
+  .tabs button.active{background:rgba(61,220,151,.1);color:var(--accent-2);border-color:var(--accent-2);}
+
+  .lib-item{
+    display:flex;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;
+    padding:8px;margin-bottom:8px;align-items:flex-start;
+  }
+  .lib-item img{width:56px;height:42px;object-fit:cover;border-radius:5px;border:1px solid var(--line);flex-shrink:0;}
+  .lib-item .lib-info{flex:1;min-width:0;}
+  .lib-item .lib-info .name{font-size:12px;font-weight:600;}
+  .lib-item .lib-info .meta{font-size:10px;color:var(--muted);font-family:var(--mono);margin-top:2px;}
+  .lib-item .lib-actions{display:flex;flex-direction:column;gap:4px;align-items:flex-end;}
+  .lib-item .lib-actions label{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--accent-2);font-family:var(--mono);}
+
   input[type=file]{display:none;}
+  input[type=checkbox]{accent-color:var(--accent-2);}
 </style>
 </head>
 <body>
@@ -129,6 +157,10 @@
       <label for="modelName">Modelo</label>
       <input id="modelName" type="text" value="gemini-2.5-flash">
     </div>
+    <div class="field">
+      <label for="maxRounds">Rodadas máx. (0=∞)</label>
+      <input id="maxRounds" type="number" min="0" value="0" style="width:80px;">
+    </div>
   </div>
 </header>
 
@@ -141,7 +173,7 @@
     <input type="file" id="fileInitial" accept="image/*" multiple>
     <div class="thumbs" id="thumbsInitial"></div>
     <button class="primary" id="btnGenerate">Gerar modelo (rodada 1)</button>
-    <div class="hint">A rodada 1 pede à IA a estrutura de faces (posição, rotação, tamanho, cor) do objeto. As imagens são reduzidas antes do envio para economizar tokens.</div>
+    <div class="hint">A rodada 1 pede à IA a estrutura de faces (posição, rotação, tamanho, cor, tipo) do objeto. As imagens são reduzidas antes do envio para economizar tokens.</div>
 
     <h2 style="margin-top:26px;">Ajuste durante o treino</h2>
     <textarea id="feedbackText" placeholder="Ex: o encosto está muito alto, deixe as pernas mais grossas..."></textarea>
@@ -160,17 +192,34 @@
       Faces: <span id="hudFaces">0</span><br>
       Estado: <span class="status" id="hudStatus">parado</span>
     </div>
+    <div class="preview-banner" id="previewBanner">
+      <span id="previewBannerText"></span>
+      <button class="secondary small" id="btnRestoreModel">Restaurar meu modelo</button>
+    </div>
     <div class="loop-controls">
       <button class="primary" id="btnStart" disabled>Iniciar rodadas de refinamento</button>
       <button class="danger" id="btnStop" disabled>Parar</button>
+      <button class="secondary" id="btnExport" disabled>Exportar GLTF</button>
     </div>
   </section>
 
-  <!-- COLUNA 3: LOG -->
+  <!-- COLUNA 3: LOG / BIBLIOTECA -->
   <section class="col" id="colLog">
-    <h2>Histórico de rodadas</h2>
-    <div class="log" id="log">
-      <div class="empty-state">nenhuma rodada ainda — gere o modelo inicial ao lado.</div>
+    <div class="tabs">
+      <button class="active" id="tabHistorico">Histórico</button>
+      <button id="tabBiblioteca">Biblioteca</button>
+    </div>
+
+    <div id="panelHistorico">
+      <div class="log" id="log">
+        <div class="empty-state">nenhuma rodada ainda — gere o modelo inicial ao lado.</div>
+      </div>
+    </div>
+
+    <div id="panelBiblioteca" style="display:none;">
+      <button class="secondary" id="btnSaveLibrary">+ Salvar modelo atual como referência</button>
+      <div class="hint">Modelos salvos aqui ficam guardados no navegador (localStorage). Marque "usar" em até 3 deles para que a IA veja o JSON deles como exemplo de estilo/formato ao gerar ou refinar — isso ajuda a IA a aprender o padrão de faces que você gosta, sem copiar o objeto literalmente.</div>
+      <div id="libraryList" style="margin-top:14px;"></div>
     </div>
   </section>
 </main>
@@ -186,15 +235,22 @@
 <script type="module">
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 
 /* ---------- estado ---------- */
 let faces = [];
 let running = false;
 let roundNumber = 0;
 let pendingFeedbackText = "";
-let pendingFeedbackImages = []; // {mime,data} base64 already resized
+let pendingFeedbackImages = [];
 let initialImages = [];
 let stopRequested = false;
+let stableRounds = 0;
+
+let trainingModels = [];
+try { trainingModels = JSON.parse(localStorage.getItem('forja3d_library') || '[]'); } catch(e){ trainingModels = []; }
+let selectedRefIds = new Set();
+let previewBackup = null;
 
 /* ---------- three.js setup ---------- */
 const viewerEl = document.getElementById('viewer');
@@ -246,6 +302,7 @@ capRenderer.setSize(320, 240, false);
 const capCamera = new THREE.PerspectiveCamera(45, 320/240, 0.01, 100);
 
 function captureAngles(){
+  grid.visible = false; // não deixa a grade do chão aparecer nas fotos enviadas à IA
   const box = new THREE.Box3().setFromObject(modelGroup);
   const size = box.isEmpty() ? new THREE.Vector3(1,1,1) : box.getSize(new THREE.Vector3());
   const center = box.isEmpty() ? new THREE.Vector3(0,0.5,0) : box.getCenter(new THREE.Vector3());
@@ -264,7 +321,48 @@ function captureAngles(){
     const dataUrl = capRenderer.domElement.toDataURL('image/jpeg', 0.55);
     shots.push({ angle: name, data: dataUrl.split(',')[1] });
   }
+  grid.visible = true;
   return shots;
+}
+
+function captureThumb(){
+  grid.visible = false;
+  const box = new THREE.Box3().setFromObject(modelGroup);
+  const size = box.isEmpty() ? new THREE.Vector3(1,1,1) : box.getSize(new THREE.Vector3());
+  const center = box.isEmpty() ? new THREE.Vector3(0,0.5,0) : box.getCenter(new THREE.Vector3());
+  const r = Math.max(size.length(), 1.2) * 1.3;
+  const p = new THREE.Vector3(0.7,0.7,0.7).normalize().multiplyScalar(r).add(center);
+  capCamera.position.copy(p);
+  capCamera.lookAt(center);
+  capRenderer.render(scene, capCamera);
+  const data = capRenderer.domElement.toDataURL('image/jpeg', 0.6);
+  grid.visible = true;
+  return data;
+}
+
+/* ---------- validação das faces vindas da IA ---------- */
+function validateFaces(rawFaces){
+  const valid = [];
+  let discarded = 0;
+  for (const f of (rawFaces || [])){
+    const okPos = Array.isArray(f.position) && f.position.length >= 3 && f.position.every(n => typeof n === 'number' && isFinite(n));
+    const okRot = !f.rotation || (Array.isArray(f.rotation) && f.rotation.length >= 3 && f.rotation.every(n => typeof n === 'number' && isFinite(n)));
+    const okSize = Array.isArray(f.size) && f.size.length >= 2 && f.size.every(n => typeof n === 'number' && isFinite(n) && n > 0);
+    if (okPos && okRot && okSize){
+      valid.push({
+        id: f.id || ('f' + valid.length),
+        type: f.type === 'box' ? 'box' : 'plane',
+        position: f.position.slice(0,3),
+        rotation: f.rotation ? f.rotation.slice(0,3) : [0,0,0],
+        size: f.size.slice(0,3),
+        color: typeof f.color === 'string' ? f.color : '#3ddc97',
+        label: f.label || f.id || ''
+      });
+    } else {
+      discarded++;
+    }
+  }
+  return { valid, discarded };
 }
 
 /* ---------- construir malha a partir do JSON de faces ---------- */
@@ -274,7 +372,10 @@ function rebuildModel(newFaces){
   for (const f of faces){
     const w = Math.max(0.02, f.size?.[0] ?? 0.5);
     const h = Math.max(0.02, f.size?.[1] ?? 0.5);
-    const geo = new THREE.PlaneGeometry(w, h);
+    const d = Math.max(0.02, f.size?.[2] ?? w);
+    const geo = f.type === 'box'
+      ? new THREE.BoxGeometry(w, h, d)
+      : new THREE.PlaneGeometry(w, h);
     const mat = new THREE.MeshStandardMaterial({
       color: f.color || '#3ddc97',
       side: THREE.DoubleSide,
@@ -290,7 +391,57 @@ function rebuildModel(newFaces){
     modelGroup.add(mesh);
   }
   document.getElementById('hudFaces').textContent = faces.length;
+  document.getElementById('btnExport').disabled = faces.length === 0;
+  saveState();
 }
+
+function facesDiff(a, b){
+  if (!a.length || a.length !== b.length) return 999;
+  let total = 0;
+  for (let i = 0; i < a.length; i++){
+    const fa = a[i], fb = b[i];
+    for (let k = 0; k < 3; k++) total += Math.abs((fa.position?.[k]||0) - (fb.position?.[k]||0));
+    for (let k = 0; k < 3; k++) total += Math.abs((fa.rotation?.[k]||0) - (fb.rotation?.[k]||0));
+    for (let k = 0; k < 3; k++) total += Math.abs((fa.size?.[k]||0) - (fb.size?.[k]||0));
+  }
+  return total;
+}
+
+/* ---------- persistência local ---------- */
+function saveState(){
+  try {
+    localStorage.setItem('forja3d_faces', JSON.stringify(faces));
+    localStorage.setItem('forja3d_round', String(roundNumber));
+  } catch(e){ /* quota cheia, ignora */ }
+}
+function saveConfig(){
+  localStorage.setItem('forja3d_apikey', document.getElementById('apiKey').value);
+  localStorage.setItem('forja3d_model', document.getElementById('modelName').value);
+}
+document.getElementById('apiKey').addEventListener('change', saveConfig);
+document.getElementById('modelName').addEventListener('change', saveConfig);
+
+window.addEventListener('DOMContentLoaded', () => {
+  const savedKey = localStorage.getItem('forja3d_apikey');
+  if (savedKey) document.getElementById('apiKey').value = savedKey;
+  const savedModel = localStorage.getItem('forja3d_model');
+  if (savedModel) document.getElementById('modelName').value = savedModel;
+  const savedFaces = localStorage.getItem('forja3d_faces');
+  const savedRound = localStorage.getItem('forja3d_round');
+  if (savedFaces){
+    try {
+      const parsed = JSON.parse(savedFaces);
+      if (Array.isArray(parsed) && parsed.length){
+        rebuildModel(parsed);
+        roundNumber = savedRound ? parseInt(savedRound, 10) || 0 : 0;
+        setHud();
+        document.getElementById('btnStart').disabled = false;
+        logRound('Sessão restaurada', `${parsed.length} faces carregadas do navegador (rodada ${roundNumber}).`);
+      }
+    } catch(e){}
+  }
+  renderLibrary();
+});
 
 /* ---------- utilidades de imagem ---------- */
 function fileToResizedBase64(file, maxDim=480, quality=0.7){
@@ -348,15 +499,131 @@ function setupDropzone(zoneId, inputId, thumbsId, store){
 setupDropzone('dropInitial', 'fileInitial', 'thumbsInitial', initialImages);
 setupDropzone('dropFeedback', 'fileFeedback', 'thumbsFeedback', pendingFeedbackImages);
 
-/* ---------- chamada à API Gemini ---------- */
-const SYSTEM_GEN = "Você gera estruturas 3D simples feitas de faces planas (retângulos) para representar objetos. " +
-  "Responda SOMENTE com um objeto JSON válido, sem markdown, sem explicações, no formato: " +
-  '{"faces":[{"id":"string curta","position":[x,y,z],"rotation":[x,y,z em radianos],"size":[largura,altura],"color":"#hex","label":"string curta"}]}. ' +
-  "Use metros como unidade, origem no chão do objeto (y=0 na base). Seja econômico: gere só as faces essenciais para reconhecer a forma (ex: 6 a 40 faces).";
+/* ---------- biblioteca de referência (few-shot) ---------- */
+function renderLibrary(){
+  const list = document.getElementById('libraryList');
+  if (!trainingModels.length){
+    list.innerHTML = '<div class="empty-state">nenhum modelo salvo ainda — gere ou refine algo e clique em "Salvar modelo atual".</div>';
+    return;
+  }
+  list.innerHTML = '';
+  for (const item of trainingModels){
+    const row = document.createElement('div');
+    row.className = 'lib-item';
+    row.innerHTML = `
+      <img src="data:image/jpeg;base64,${item.thumb ? item.thumb.split(',')[1] || item.thumb : ''}">
+      <div class="lib-info">
+        <div class="name">${item.name}</div>
+        <div class="meta">${item.faces.length} faces</div>
+      </div>
+      <div class="lib-actions">
+        <label><input type="checkbox" data-id="${item.id}" class="refCheck" ${selectedRefIds.has(item.id) ? 'checked' : ''}> usar</label>
+        <button class="secondary small" data-act="ver" data-id="${item.id}">ver</button>
+        <button class="danger small" data-act="excluir" data-id="${item.id}">excluir</button>
+      </div>`;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('.refCheck').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedRefIds.add(cb.dataset.id);
+      else selectedRefIds.delete(cb.dataset.id);
+    });
+  });
+  list.querySelectorAll('button[data-act="ver"]').forEach(b => {
+    b.addEventListener('click', () => previewModel(b.dataset.id));
+  });
+  list.querySelectorAll('button[data-act="excluir"]').forEach(b => {
+    b.addEventListener('click', () => {
+      trainingModels = trainingModels.filter(m => m.id !== b.dataset.id);
+      selectedRefIds.delete(b.dataset.id);
+      localStorage.setItem('forja3d_library', JSON.stringify(trainingModels));
+      renderLibrary();
+    });
+  });
+}
 
-const SYSTEM_REFINE = "Você refina um modelo 3D feito de faces planas. Vai receber o array de faces atual e capturas do modelo renderizado de vários ângulos, " +
+document.getElementById('btnSaveLibrary').addEventListener('click', () => {
+  if (!faces.length){ logRound('Biblioteca', 'Não há modelo atual para salvar como referência.', true); return; }
+  const name = prompt('Nome para este modelo de referência:', 'Modelo ' + (trainingModels.length + 1));
+  if (!name) return;
+  const item = {
+    id: Date.now().toString(36),
+    name,
+    faces: JSON.parse(JSON.stringify(faces)),
+    thumb: captureThumb(),
+    createdAt: Date.now()
+  };
+  trainingModels.push(item);
+  try { localStorage.setItem('forja3d_library', JSON.stringify(trainingModels)); }
+  catch(e){ logRound('Biblioteca', 'Não foi possível salvar (armazenamento local cheio).', true); trainingModels.pop(); return; }
+  renderLibrary();
+  logRound('Biblioteca', `Modelo "${name}" salvo como referência (${item.faces.length} faces).`);
+});
+
+function previewModel(id){
+  const item = trainingModels.find(m => m.id === id);
+  if (!item) return;
+  if (previewBackup === null) previewBackup = JSON.parse(JSON.stringify(faces));
+  rebuildModel(item.faces);
+  document.getElementById('previewBanner').style.display = 'flex';
+  document.getElementById('previewBannerText').textContent = 'Visualizando referência: ' + item.name;
+}
+document.getElementById('btnRestoreModel').addEventListener('click', () => {
+  if (previewBackup !== null){
+    rebuildModel(previewBackup);
+    previewBackup = null;
+  }
+  document.getElementById('previewBanner').style.display = 'none';
+});
+
+function buildReferenceContext(){
+  const selected = trainingModels.filter(m => selectedRefIds.has(m.id)).slice(0, 3);
+  if (!selected.length) return '';
+  const blocks = selected.map(m => `Exemplo "${m.name}" (${m.faces.length} faces): ${JSON.stringify(m.faces)}`);
+  return '\n\nExemplos de referência de outros modelos já feitos (use apenas como inspiração de formato/estilo de faces, não copie literalmente a menos que se aplique ao objeto atual):\n' + blocks.join('\n');
+}
+
+/* ---------- abas histórico / biblioteca ---------- */
+document.getElementById('tabHistorico').addEventListener('click', () => {
+  document.getElementById('tabHistorico').classList.add('active');
+  document.getElementById('tabBiblioteca').classList.remove('active');
+  document.getElementById('panelHistorico').style.display = '';
+  document.getElementById('panelBiblioteca').style.display = 'none';
+});
+document.getElementById('tabBiblioteca').addEventListener('click', () => {
+  document.getElementById('tabBiblioteca').classList.add('active');
+  document.getElementById('tabHistorico').classList.remove('active');
+  document.getElementById('panelBiblioteca').style.display = '';
+  document.getElementById('panelHistorico').style.display = 'none';
+});
+
+/* ---------- exportar GLTF ---------- */
+document.getElementById('btnExport').addEventListener('click', () => {
+  if (!faces.length) return;
+  const exporter = new GLTFExporter();
+  exporter.parse(modelGroup, (result) => {
+    const blob = new Blob([JSON.stringify(result)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'forja3d-modelo.gltf'; a.click();
+    URL.revokeObjectURL(url);
+    logRound('Exportado', 'Modelo exportado como forja3d-modelo.gltf.');
+  }, (err) => {
+    logRound('Erro na exportação', err.message || String(err), true);
+  }, {});
+});
+
+/* ---------- chamada à API Gemini ---------- */
+const SYSTEM_GEN = "Você gera estruturas 3D simples feitas de faces planas ou blocos para representar objetos. " +
+  "Responda SOMENTE com um objeto JSON válido, sem markdown, sem explicações, no formato: " +
+  '{"faces":[{"id":"string curta","type":"plane ou box","position":[x,y,z],"rotation":[x,y,z em radianos],"size":[largura,altura,profundidade opcional],"color":"#hex","label":"string curta"}]}. ' +
+  "Use 'box' para partes com volume real (assentos, pernas grossas, blocos) e 'plane' para superfícies finas. " +
+  "Use metros como unidade, origem no chão do objeto (y=0 na base). Seja econômico: gere só as faces essenciais para reconhecer a forma (ex: 6 a 40 faces). " +
+  "Se receber exemplos de referência de outros modelos, use-os apenas para entender o padrão de granularidade e nomenclatura esperado, não copie o objeto deles.";
+
+const SYSTEM_REFINE = "Você refina um modelo 3D feito de faces planas e blocos. Vai receber o array de faces atual e capturas do modelo renderizado de vários ângulos, " +
   "além de uma referência (texto e/ou fotos) do objeto desejado e possíveis observações do usuário. " +
-  "Compare e corrija posição, rotação, tamanho e cor das faces para aproximar o modelo do objetivo. " +
+  "Compare e corrija posição, rotação, tamanho, tipo (plane/box) e cor das faces para aproximar o modelo do objetivo. " +
   "Responda SOMENTE com JSON válido no mesmo formato: {\"faces\":[...]}. Sem texto extra, sem markdown.";
 
 async function callGemini(systemText, textParts, images){
@@ -387,7 +654,9 @@ async function callGemini(systemText, textParts, images){
   });
   if (!resp.ok){
     const errText = await resp.text();
-    throw new Error(`Erro da API (${resp.status}): ${errText.slice(0,300)}`);
+    const err = new Error(`Erro da API (${resp.status}): ${errText.slice(0,300)}`);
+    err.isRateLimit = (resp.status === 429);
+    throw err;
   }
   const data = await resp.json();
   const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
@@ -395,7 +664,11 @@ async function callGemini(systemText, textParts, images){
   try { parsed = JSON.parse(raw); }
   catch(e){ throw new Error('A IA respondeu algo que não é JSON válido: ' + raw.slice(0,200)); }
   if (!parsed.faces || !Array.isArray(parsed.faces)) throw new Error('JSON sem campo "faces" válido.');
-  return parsed.faces;
+
+  const { valid, discarded } = validateFaces(parsed.faces);
+  if (!valid.length) throw new Error('Nenhuma face válida no JSON retornado pela IA.');
+  if (discarded) logRound('Aviso de validação', `${discarded} face(s) descartada(s) por dados inválidos (posição/tamanho ausente ou não numérico).`, true);
+  return valid;
 }
 
 /* ---------- log ---------- */
@@ -424,9 +697,10 @@ document.getElementById('btnGenerate').addEventListener('click', async () => {
     if (!text && initialImages.length === 0){
       throw new Error('Descreva o objeto em texto e/ou envie uma foto de referência.');
     }
-    const prompt = `Descrição do objeto: ${text || '(ver imagens anexadas)'}\nGere a estrutura de faces inicial.`;
+    const prompt = `Descrição do objeto: ${text || '(ver imagens anexadas)'}\nGere a estrutura de faces inicial.` + buildReferenceContext();
     const newFaces = await callGemini(SYSTEM_GEN, prompt, initialImages);
     roundNumber = 1;
+    stableRounds = 0;
     rebuildModel(newFaces);
     setHud();
     logRound('Rodada 1 — geração inicial', `${newFaces.length} faces criadas a partir da descrição/imagens.`);
@@ -448,7 +722,8 @@ document.getElementById('btnSendFeedback').addEventListener('click', () => {
 
 /* ---------- laço de refinamento ---------- */
 document.getElementById('btnStart').addEventListener('click', () => {
-  running = true; stopRequested = false;
+  if (previewBackup !== null){ rebuildModel(previewBackup); previewBackup = null; document.getElementById('previewBanner').style.display = 'none'; }
+  running = true; stopRequested = false; stableRounds = 0;
   document.getElementById('btnStart').disabled = true;
   document.getElementById('btnStop').disabled = false;
   setHud();
@@ -461,6 +736,11 @@ document.getElementById('btnStop').addEventListener('click', () => {
 
 async function refineLoop(){
   while (!stopRequested){
+    const maxRounds = parseInt(document.getElementById('maxRounds').value, 10) || 0;
+    if (maxRounds > 0 && roundNumber >= maxRounds){
+      logRound('Limite atingido', `Rodadas máximas (${maxRounds}) atingidas — parando automaticamente.`);
+      break;
+    }
     roundNumber++;
     setHud();
     try {
@@ -473,33 +753,43 @@ async function refineLoop(){
         `${feedbackNote}\n` +
         `As imagens a seguir são capturas do modelo atual em diferentes ângulos (rotuladas: ${shots.map(s=>s.angle).join(', ')})` +
         (pendingFeedbackImages.length ? ' seguidas de fotos de referência enviadas pelo usuário.' : '.') +
-        `\nAjuste o array "faces" para aproximar o modelo do objetivo.`;
+        `\nAjuste o array "faces" para aproximar o modelo do objetivo.` +
+        buildReferenceContext();
 
       const images = [...shots.map(s => ({ mime: 'image/jpeg', data: s.data })), ...pendingFeedbackImages];
+      const oldFaces = faces;
       const newFaces = await callGemini(SYSTEM_REFINE, promptText, images);
       rebuildModel(newFaces);
-      logRound(`Rodada ${roundNumber} — refinamento`,
-        `${newFaces.length} faces atualizadas.` + (pendingFeedbackText ? ` Ajuste aplicado: "${pendingFeedbackText}"` : ''));
 
-      // consome o feedback pendente após usar
+      const diff = facesDiff(oldFaces, newFaces);
+      if (diff < 0.05) stableRounds++; else stableRounds = 0;
+
+      logRound(`Rodada ${roundNumber} — refinamento`,
+        `${newFaces.length} faces atualizadas.` + (pendingFeedbackText ? ` Ajuste aplicado: "${pendingFeedbackText}"` : '') +
+        (stableRounds > 0 ? ` (variação pequena: ${stableRounds}/3 rodadas estáveis)` : ''));
+
       pendingFeedbackText = '';
       pendingFeedbackImages = [];
       document.getElementById('feedbackText').value = '';
       document.getElementById('thumbsFeedback').innerHTML = '';
 
+      if (stableRounds >= 3){
+        logRound('Convergência atingida', 'O modelo parou de mudar significativamente por 3 rodadas seguidas — parando automaticamente.');
+        break;
+      }
     } catch(e){
       logRound(`Erro na rodada ${roundNumber}`, e.message, true);
-      // espera um pouco mais após erro pra não martelar a API
-      await new Promise(r => setTimeout(r, 4000));
+      await new Promise(r => setTimeout(r, e.isRateLimit ? 20000 : 4000));
     }
     if (stopRequested) break;
     await new Promise(r => setTimeout(r, 2500));
   }
   running = false;
+  stopRequested = true;
   document.getElementById('btnStart').disabled = false;
   document.getElementById('btnStop').disabled = true;
   setHud();
-  logRound('Treino parado', `Parado pelo usuário na rodada ${roundNumber}.`);
+  logRound('Treino parado', `Parado na rodada ${roundNumber}.`);
 }
 </script>
 </body>
